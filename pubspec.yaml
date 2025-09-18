@@ -50,6 +50,8 @@ dependencies:
   google_places_flutter: ^2.1.1
   url_launcher: ^6.3.2
   firebase_messaging: ^16.0.1
+  equatable: ^2.0.7
+  intl:
 flutter_launcher_icons:
   android: true
   ios: true

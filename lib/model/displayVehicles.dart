@@ -141,12 +141,12 @@ class VehicleTypes {
 
   VehicleTypes.fromJson(Map<String, dynamic> json) {
     id = json['id'];
-    vehicleImage = json['vehicleImage'];
-    name = json['name'];
-    description = json['description'];
-    baseFare = json['base_fare'];
-    perKmRate = json['per_km_rate'];
-    perMinuteRate = json['per_minute_rate'];
+    vehicleImage = json['vehicleImage'] ?? "";
+    name = json['name'] ?? "";
+    description = json['description'] ?? "";
+    baseFare = json['base_fare'] ?? "";
+    perKmRate = json['per_km_rate'] ?? "";
+    perMinuteRate = json['per_minute_rate'] ?? "";
     seatingCapacity = json['seating_capacity'];
     luggageCapacity = json['luggage_capacity'];
     isActive = json['is_active'];

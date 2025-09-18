@@ -1,7 +1,11 @@
 import 'package:apniride_flutter/Bloc/BookRide/book_ride_cubit.dart';
+import 'package:apniride_flutter/Bloc/BookingStatus/booking_status_cubit.dart';
+import 'package:apniride_flutter/Bloc/CancelRide/cancel_ride_cubit.dart';
 import 'package:apniride_flutter/Bloc/DisplayVehicles/display_vehicles_cubit.dart';
+import 'package:apniride_flutter/Bloc/RidesHistory/rides_history_cubit.dart';
 import 'package:apniride_flutter/Bloc/UpdateProfile/update_profile_cubit.dart';
 import 'package:apniride_flutter/Bloc/UserRegister/register_cubit.dart';
+import 'package:apniride_flutter/model/booking_status.dart';
 import 'package:apniride_flutter/screen/SplashScreen.dart';
 import 'package:apniride_flutter/utils/api_service.dart';
 import 'package:apniride_flutter/utils/app_theme.dart';
@@ -28,7 +32,7 @@ Future<void> main() async {
   }
 
   FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
-    print("♻️ Refreshed FCM Token: $newToken");
+    print(" Refreshed FCM Token: $newToken");
     SharedPreferenceHelper.setFcmToken(newToken);
   });
 
@@ -56,6 +60,14 @@ class MyApp extends StatelessWidget {
                   UpdateProfileCubit(context.read<ApiService>())),
           BlocProvider(
               create: (context) => BookRideCubit(context.read<ApiService>())),
+          BlocProvider(
+              create: (context) =>
+                  BookingStatusCubit(context.read<ApiService>())),
+          BlocProvider(
+              create: (context) =>
+                  RidesHistoryCubit(context.read<ApiService>())),
+          BlocProvider(
+              create: (context) => CancelRideCubit(context.read<ApiService>())),
         ],
         child: ScreenUtilInit(
           designSize: const Size(360, 690),

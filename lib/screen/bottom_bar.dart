@@ -1,5 +1,6 @@
 import 'package:apniride_flutter/screen/profile_screen.dart';
 import 'package:apniride_flutter/screen/ride_screen.dart';
+import 'package:apniride_flutter/screen/rides_history.dart';
 import 'package:apniride_flutter/utils/app_theme.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -36,7 +37,7 @@ class _BottomNavBarState extends State<BottomNavBar> {
     _selectedIndex = widget.currentindex;
     _widgetOptions = <Widget>[
       HomeScreen(),
-      RideTrackingScreen(),
+      RidesHistories(),
       OffersScreen(),
       ProfileManagementScreen()
     ];

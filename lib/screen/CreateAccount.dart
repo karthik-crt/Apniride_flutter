@@ -47,6 +47,7 @@ class _CreateaccountState extends State<Createaccount> {
         'mobile': mobile,
         'username': _nameController.text.trim(),
         'email': _emailController.text.trim(),
+        "fcm_token": SharedPreferenceHelper.getFcmToken(),
       };
       context.read<RegisterCubit>().login(data, context);
     }

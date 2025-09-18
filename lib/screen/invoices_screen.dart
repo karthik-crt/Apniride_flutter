@@ -2,14 +2,14 @@ import 'package:apniride_flutter/utils/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
-class RideHistoryScreen extends StatefulWidget {
-  const RideHistoryScreen({Key? key}) : super(key: key);
+class InvoicesHistoryScreen extends StatefulWidget {
+  const InvoicesHistoryScreen({Key? key}) : super(key: key);
 
   @override
-  State<RideHistoryScreen> createState() => _RideHistoryScreenState();
+  State<InvoicesHistoryScreen> createState() => _InvoicesHistoryScreenState();
 }
 
-class _RideHistoryScreenState extends State<RideHistoryScreen> {
+class _InvoicesHistoryScreenState extends State<InvoicesHistoryScreen> {
   // Dummy list of rides
   final List<Map<String, String>> rides = [
     {

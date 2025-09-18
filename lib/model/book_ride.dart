@@ -59,6 +59,7 @@ class Ride {
 
   late final int id;
   late final String username;
+  late final String bookingId;
   late final String pickup;
   late final String drop;
   late final double pickupLat;
@@ -89,18 +90,16 @@ class Ride {
   Ride.fromJson(Map<String, dynamic> json) {
     id = json['id'];
     username = json['username'];
+    bookingId = json['booking_id'] ?? "";
     pickup = json['pickup'];
     drop = json['drop'];
-    pickupLat =
-        double.parse(json['pickup_lat'].toString()); // Handle String or num
-    pickupLng =
-        double.parse(json['pickup_lng'].toString()); // Handle String or num
-    dropLat = double.parse(json['drop_lat'].toString()); // Handle String or num
-    dropLng = double.parse(json['drop_lng'].toString()); // Handle String or num
+    pickupLat = double.parse(json['pickup_lat'].toString());
+    pickupLng = double.parse(json['pickup_lng'].toString());
+    dropLat = double.parse(json['drop_lat'].toString());
+    dropLng = double.parse(json['drop_lng'].toString());
     pickupMode = json['pickup_mode'];
     pickupTime = json['pickup_time'];
-    distanceKm =
-        double.parse(json['distance_km'].toString()); // Handle String or num
+    distanceKm = double.parse(json['distance_km'].toString());
     vehicleType = json['vehicle_type'];
     fare = double.parse(json['fare'].toString()); // Handle String or num
     fareEstimate =
@@ -126,6 +125,7 @@ class Ride {
     final _data = <String, dynamic>{};
     _data['id'] = id;
     _data['username'] = username;
+    _data['booking_id'] = bookingId;
     _data['pickup'] = pickup;
     _data['drop'] = drop;
     _data['pickup_lat'] = pickupLat;

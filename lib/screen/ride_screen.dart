@@ -1,16 +1,88 @@
+import 'package:apniride_flutter/Bloc/CancelRide/cancel_ride_cubit.dart';
+import 'package:apniride_flutter/model/booking_status.dart';
+import 'package:apniride_flutter/model/cancel_ride.dart';
 import 'package:apniride_flutter/screen/payment_screen.dart';
 import 'package:apniride_flutter/utils/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../Bloc/CancelRide/cancel_ride_state.dart';
+
 class RideTrackingScreen extends StatefulWidget {
+  final BookingStatus bookingStatus;
+  final int rideId;
+
+  const RideTrackingScreen(
+      {super.key, required this.bookingStatus, required this.rideId});
+
   @override
   _RideTrackingScreenState createState() => _RideTrackingScreenState();
 }
 
 class _RideTrackingScreenState extends State<RideTrackingScreen> {
+  GoogleMapController? _mapController;
+  LatLng? _pickupLocation;
+  LatLng? _dropoffLocation;
+  final Set<Marker> _markers = {};
+
   @override
+  void initState() {
+    super.initState();
+    print(widget.bookingStatus.data.fare);
+    _initializeLocationsAndMarkers();
+  }
+
+  Future<void> _initializeLocationsAndMarkers() async {
+    try {
+      List<Location> pickupLocations =
+          await locationFromAddress(widget.bookingStatus.data.pickup);
+      List<Location> dropoffLocations =
+          await locationFromAddress(widget.bookingStatus.data.drop);
+
+      if (pickupLocations.isNotEmpty && dropoffLocations.isNotEmpty) {
+        _pickupLocation = LatLng(
+            pickupLocations.first.latitude, pickupLocations.first.longitude);
+        _dropoffLocation = LatLng(
+            dropoffLocations.first.latitude, dropoffLocations.first.longitude);
+
+// Create markers
+        final pickupMarker = Marker(
+          markerId: const MarkerId('pickup'),
+          position: _pickupLocation!,
+          infoWindow: InfoWindow(title: widget.bookingStatus.data.pickup),
+          icon: await BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueGreen),
+        );
+
+        final dropoffMarker = Marker(
+          markerId: const MarkerId('dropoff'),
+          position: _dropoffLocation!,
+          infoWindow: InfoWindow(title: widget.bookingStatus.data.drop),
+          icon: await BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueRed),
+        );
+
+        setState(() {
+          _markers.addAll([pickupMarker, dropoffMarker]);
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading map coordinates: $e')),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _mapController?.dispose();
+    super.dispose();
+  }
+
   Future<void> makePhoneCall(String phoneNumber) async {
     final Uri phoneUri = Uri(scheme: 'tel', path: phoneNumber);
     try {
@@ -26,22 +98,68 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
     }
   }
 
+  Future<void> _cancelRide() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Cancel Ride'),
+          content: const Text('Are you sure you want to cancel this ride?'),
+          actions: [
+            TextButton(
+              child: const Text('No'),
+              onPressed: () => Navigator.of(context).pop(false),
+            ),
+            TextButton(
+              child: const Text('Yes'),
+              onPressed: () => Navigator.of(context).pop(true),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      context.read<CancelRideCubit>().cancelRides(context, widget.rideId);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        height: MediaQuery.of(context).size.height,
-        child: Stack(
+    return BlocListener<CancelRideCubit, CancelRideState>(
+      listener: (context, state) {
+        if (state is CancelRideSuccess) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.cancelRide.statusMessage),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pop(context);
+        } else if (state is CancelRideError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.message),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      },
+      child: Scaffold(
+        body: Stack(
           children: [
-            Container(
-              height: 250.h,
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                color: Colors.grey,
-                image: DecorationImage(
-                  image: AssetImage('assets/static_map.jpeg'),
-                  fit: BoxFit.fill,
-                ),
+// Full-screen Google Map
+            GoogleMap(
+              initialCameraPosition: CameraPosition(
+                target: _pickupLocation ?? const LatLng(28.7041, 77.1025),
+                zoom: 10,
               ),
+              markers: _markers,
+              onMapCreated: (GoogleMapController controller) {
+                _mapController = controller;
+              },
+              myLocationEnabled: true,
+              myLocationButtonEnabled: true,
             ),
             SafeArea(
               child: Padding(
@@ -55,8 +173,10 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
                         Row(
                           children: [
                             IconButton(
-                              icon: Icon(Icons.arrow_back),
-                              onPressed: () {},
+                              icon: const Icon(Icons.arrow_back),
+                              onPressed: () {
+                                Navigator.pop(context);
+                              },
                             ),
                             Text(
                               "Back",
@@ -68,7 +188,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
                           ],
                         ),
                         IconButton(
-                          icon: Icon(Icons.notifications_none),
+                          icon: const Icon(Icons.notifications_none),
                           onPressed: () {},
                         ),
                       ],
@@ -83,7 +203,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
               maxChildSize: 0.9,
               builder: (context, scrollController) {
                 return Container(
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.only(
                       topLeft: Radius.circular(20),
@@ -91,7 +211,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.grey.withOpacity(0.5),
+                        color: Colors.grey,
                         spreadRadius: 0,
                         blurRadius: 5,
                         offset: Offset(0, -2),
@@ -101,7 +221,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
                   child: SingleChildScrollView(
                     controller: scrollController,
                     child: SizedBox(
-                      height: 500.h, // Fixed height for the content
+                      height: 500.h,
                       child: Padding(
                         padding: EdgeInsets.all(10.w),
                         child: Column(
@@ -130,21 +250,53 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
                                 ),
                               ),
                             ),
+                            if (widget.bookingStatus.data.otp != null)
+                              Padding(
+                                padding: EdgeInsets.only(left: 20, top: 20),
+                                child: Text(
+                                  "Your OTP: ${widget.bookingStatus.data.otp}",
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                        fontSize: 15.sp,
+                                        color: AppColors.background,
+                                      ),
+                                ),
+                              ),
                             SizedBox(height: 12.h),
-                            Divider(),
-                            // Driver info card
+                            const Divider(),
+// Driver info card
                             Padding(
-                              padding: EdgeInsets.all(10),
+                              padding: const EdgeInsets.all(10),
                               child: Row(
                                 children: [
                                   ClipRRect(
                                     borderRadius: BorderRadius.circular(8),
-                                    child: Image.asset(
-                                      'assets/driver.png',
-                                      width: 80.w,
-                                      height: 60.h,
-                                      fit: BoxFit.cover,
-                                    ),
+                                    child: widget.bookingStatus.data
+                                                .driverPhoto !=
+                                            null
+                                        ? Image.network(
+                                            widget.bookingStatus.data
+                                                .driverPhoto!,
+                                            width: 80.w,
+                                            height: 60.h,
+                                            fit: BoxFit.cover,
+                                            errorBuilder:
+                                                (context, error, stackTrace) =>
+                                                    Image.asset(
+                                              'assets/driver.png',
+                                              width: 80.w,
+                                              height: 60.h,
+                                              fit: BoxFit.cover,
+                                            ),
+                                          )
+                                        : Image.asset(
+                                            'assets/driver.png',
+                                            width: 80.w,
+                                            height: 60.h,
+                                            fit: BoxFit.cover,
+                                          ),
                                   ),
                                   SizedBox(width: 10.w),
                                   Expanded(
@@ -153,39 +305,46 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          "Vikram Raj",
+                                          widget.bookingStatus.data
+                                                  .driverName ??
+                                              "Unknown Driver",
                                           style: Theme.of(context)
                                               .textTheme
                                               .bodyMedium
                                               ?.copyWith(
-                                                  fontSize: 13.sp,
-                                                  fontWeight: FontWeight.bold),
+                                                fontSize: 13.sp,
+                                                fontWeight: FontWeight.bold,
+                                              ),
                                         ),
                                         Text(
-                                          "Vehicle Info: Sedan, Black, DL 1A B2345",
+                                          "Vehicle Info: ${widget.bookingStatus.data.vechicleName ?? 'Unknown'}",
                                           style: Theme.of(context)
                                               .textTheme
                                               .bodyMedium
                                               ?.copyWith(
-                                                  fontSize: 10.sp,
-                                                  color: Colors.grey),
+                                                fontSize: 10.sp,
+                                                color: Colors.grey.shade700,
+                                              ),
                                         ),
-                                        Row(
-                                          children: [
-                                            Icon(Icons.star,
-                                                color: Colors.orange,
-                                                size: 16.sp),
-                                            SizedBox(width: 4.w),
-                                            Text(
-                                              "4.9 (531 reviews)",
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodyMedium
-                                                  ?.copyWith(
-                                                      fontSize: 10.sp,
-                                                      color: Colors.grey),
-                                            ),
-                                          ],
+                                        Text(
+                                          "Vehicle Number: ${widget.bookingStatus.data.vehicleNumber ?? 'Unknown'}",
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                fontSize: 10.sp,
+                                                color: Colors.grey.shade700,
+                                              ),
+                                        ),
+                                        Text(
+                                          "Contact: ${widget.bookingStatus.data.driverNumber ?? 'Unknown'}",
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                fontSize: 10.sp,
+                                                color: Colors.grey.shade700,
+                                              ),
                                         ),
                                       ],
                                     ),
@@ -198,11 +357,12 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
                                 ],
                               ),
                             ),
-                            Divider(),
+                            const Divider(),
                             SizedBox(height: 20.h),
-                            // Payment method section
+// Payment method section
                             Padding(
-                              padding: EdgeInsets.only(left: 20, right: 20),
+                              padding:
+                                  const EdgeInsets.only(left: 20, right: 20),
                               child: Row(
                                 children: [
                                   Text(
@@ -212,9 +372,9 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
                                         .bodyMedium
                                         ?.copyWith(fontSize: 15.sp),
                                   ),
-                                  Spacer(),
+                                  const Spacer(),
                                   Text(
-                                    "₹220.00",
+                                    "₹${widget.bookingStatus.data.fare.toStringAsFixed(2)}",
                                     style: TextStyle(
                                       fontSize: 18.sp,
                                       fontWeight: FontWeight.bold,
@@ -227,10 +387,10 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
                             GestureDetector(
                               onTap: () {
                                 Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                        builder: (context) =>
-                                            PaymentsScreen()));
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) => PaymentsScreen()),
+                                );
                               },
                               child: Padding(
                                 padding: EdgeInsets.symmetric(
@@ -281,23 +441,26 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
                               ),
                             ),
                             SizedBox(height: 20.h),
-                            // Buttons
+// Buttons
                             Padding(
                               padding: EdgeInsets.symmetric(
                                   horizontal: 10.w, vertical: 5.h),
                               child: Row(
                                 children: [
-                                  GestureDetector(
-                                    onTap: () {
-                                      makePhoneCall("+918190958524");
-                                    },
-                                    child: CircleAvatar(
-                                      radius: 25.r,
-                                      backgroundColor: Colors.grey.shade200,
-                                      child: Icon(Icons.call,
-                                          color: AppColors.background),
+                                  if (widget.bookingStatus.data.driverNumber !=
+                                      null)
+                                    GestureDetector(
+                                      onTap: () {
+                                        makePhoneCall(widget
+                                            .bookingStatus.data.driverNumber!);
+                                      },
+                                      child: CircleAvatar(
+                                        radius: 25.r,
+                                        backgroundColor: Colors.grey.shade200,
+                                        child: Icon(Icons.call,
+                                            color: AppColors.background),
+                                      ),
                                     ),
-                                  ),
                                   SizedBox(width: 10.w),
                                   CircleAvatar(
                                     radius: 25.r,
@@ -305,16 +468,17 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
                                     child: Icon(Icons.message,
                                         color: AppColors.background),
                                   ),
-                                  Spacer(),
+                                  const Spacer(),
                                   ElevatedButton(
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.background,
+                                      backgroundColor: Colors.red,
+                                      foregroundColor: Colors.white,
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                     ),
-                                    onPressed: () {},
-                                    child: Text("Cancel Ride"),
+                                    onPressed: _cancelRide,
+                                    child: const Text("Cancel Ride"),
                                   ),
                                 ],
                               ),

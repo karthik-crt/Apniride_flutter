@@ -3,8 +3,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:apniride_flutter/model/Updateprofile.dart';
 import 'package:apniride_flutter/model/book_ride.dart';
+import 'package:apniride_flutter/model/booking_status.dart';
+import 'package:apniride_flutter/model/cancel_ride.dart';
 import 'package:apniride_flutter/model/displayVehicles.dart';
 import 'package:apniride_flutter/model/register_data.dart';
+import 'package:apniride_flutter/model/rides_history_data.dart';
 import 'package:apniride_flutter/utils/shared_preference.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/cupertino.dart';
@@ -15,6 +18,8 @@ import '../model/login_data.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+import '../model/update_token.dart';
+
 late GlobalKey<NavigatorState> _navigatorKey;
 
 class ApiBaseHelper {
@@ -22,7 +27,7 @@ class ApiBaseHelper {
     _navigatorKey = navigatorKey;
   }
 
-  static const _baseUrl = "http://192.168.0.15:8000/api/";
+  static const _baseUrl = "http://192.168.0.6:8000/api/";
 
   final Dio dio = Dio(
     BaseOptions(
@@ -315,7 +320,7 @@ class ApiService {
 
   Future<DisplayVehicles> displayVehicles() async {
     final response = await _helper.get("user/vehicle-types");
-    print("response");
+    print("response ${response}");
     return displayVehiclesFromJson(response);
   }
 
@@ -337,6 +342,36 @@ class ApiService {
     print("response");
     print("responseresponse ${response}");
     return bookRideFromJson(response);
+  }
+
+  Future<BookingStatus> bookingStatus(bookingId) async {
+    print("data ${bookingId}");
+    final response = await _helper.get("booking/status/${bookingId}");
+    print("BookingStatusresponse");
+    print(response);
+    return bookingStatusFromJson(response);
+  }
+
+  Future<RidesHistory> getRidesHistory() async {
+    final response = await _helper.get("rides/history/");
+    print("RidesHistory");
+    print(response);
+    return ridesHistoryFromJson(response);
+  }
+
+  Future<CancelRide> cancelRide(int rideId) async {
+    print("data ${rideId}");
+    final response = await _helper.post("rides/${rideId}/cancel/");
+    print("response");
+    print("ride Id ${response}");
+    return cancelRideFromJson(response);
+  }
+
+  Future<UpdateToken> updateFcm(data) async {
+    print("datsasa$data");
+    final response = await _helper.patch("fcm/token", data);
+    print("getFcmResponse ${response}");
+    return updateTokenFromJson(response);
   }
 }
 

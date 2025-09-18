@@ -26,6 +26,7 @@ class _MobileverificationState extends State<Mobileverification> {
   void validateAndLogin() {
     final data = {
       "mobile": mobile.text,
+      "fcm_token": SharedPreferenceHelper.getFcmToken(),
     };
     context.read<LoginCubit>().login(data, context);
   }
