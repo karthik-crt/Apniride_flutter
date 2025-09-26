@@ -6,6 +6,7 @@ import 'package:apniride_flutter/model/book_ride.dart';
 import 'package:apniride_flutter/model/booking_status.dart';
 import 'package:apniride_flutter/model/cancel_ride.dart';
 import 'package:apniride_flutter/model/displayVehicles.dart';
+import 'package:apniride_flutter/model/invoice_data.dart';
 import 'package:apniride_flutter/model/register_data.dart';
 import 'package:apniride_flutter/model/rides_history_data.dart';
 import 'package:apniride_flutter/utils/shared_preference.dart';
@@ -27,8 +28,7 @@ class ApiBaseHelper {
     _navigatorKey = navigatorKey;
   }
 
-  static const _baseUrl = "http://192.168.0.6:8000/api/";
-
+  static const _baseUrl = "http://192.168.0.12:8000/api/";
   final Dio dio = Dio(
     BaseOptions(
       baseUrl: _baseUrl,
@@ -68,7 +68,7 @@ class ApiBaseHelper {
 
   Map<String, String> getMainHeaders() {
     String? token = SharedPreferenceHelper.getToken() ?? "";
-    print("Print ${token}");
+    print("User Token ${token}");
     Map<String, String> headers = {'Content-Type': 'application/json'};
 
     if (token != null && token != "") {
@@ -372,6 +372,12 @@ class ApiService {
     final response = await _helper.patch("fcm/token", data);
     print("getFcmResponse ${response}");
     return updateTokenFromJson(response);
+  }
+
+  Future<InvoiceHistory> getInvoices() async {
+    final response = await _helper.get("invoice/history/");
+    print("getHistory ${response}");
+    return invoiceHistoryFromJson(response);
   }
 }
 

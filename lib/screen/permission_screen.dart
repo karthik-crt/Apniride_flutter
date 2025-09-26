@@ -4,6 +4,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
+import 'bottom_bar.dart';
+
 class PermissionScreen extends StatefulWidget {
   const PermissionScreen({super.key});
 
@@ -25,7 +27,11 @@ class _PermissionScreenState extends State<PermissionScreen> {
     //   const SnackBar(content: Text("Permissions granted successfully")),
     // );
     Navigator.push(
-        context, MaterialPageRoute(builder: (context) => PaymentOptinal()));
+        context,
+        MaterialPageRoute(
+            builder: (context) => BottomNavBar(
+                  currentindex: 0,
+                )));
   }
 
   @override

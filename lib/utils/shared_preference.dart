@@ -111,4 +111,23 @@ class SharedPreferenceHelper {
   static String? getFcmToken() {
     return getString("fcm_token");
   }
+
+  static const String _paymentMethodKey = 'selected_payment_method';
+  static const String _walletBalanceKey = 'wallet_balance';
+
+  static Future<void> setPaymentMethod(String method) async {
+    await setString(_paymentMethodKey, method);
+  }
+
+  static Future<String?> getPaymentMethod() async {
+    return getString(_paymentMethodKey);
+  }
+
+  static Future<void> setWalletBalance(double balance) async {
+    await setDouble(_walletBalanceKey, balance);
+  }
+
+  static Future<double?> getWalletBalance() async {
+    return getDouble(_walletBalanceKey);
+  }
 }
