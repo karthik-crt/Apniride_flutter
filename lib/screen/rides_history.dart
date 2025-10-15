@@ -192,8 +192,11 @@
 // }
 import 'package:apniride_flutter/Bloc/RidesHistory/rides_history_cubit.dart';
 import 'package:apniride_flutter/model/rides_history_data.dart';
+import 'package:apniride_flutter/screen/bottom_bar.dart';
+import 'package:apniride_flutter/screen/ride_screen.dart';
 import 'package:apniride_flutter/utils/app_theme.dart';
 import 'package:apniride_flutter/model/booking_status.dart'; // Import BookingStatus
+import 'package:apniride_flutter/utils/shared_preference.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -234,7 +237,11 @@ class _RidesHistoriesState extends State<RidesHistories> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back_ios, size: 22),
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) =>
+                                BottomNavBar(currentindex: 0))),
                   ),
                   const SizedBox(width: 5),
                   Text(
@@ -254,8 +261,10 @@ class _RidesHistoriesState extends State<RidesHistories> {
                 child: BlocBuilder<RidesHistoryCubit, RidesHistoryState>(
                   builder: (context, state) {
                     if (state is RidesHistoryLoading) {
+                      print("LoadingStage...");
                       return const Center(child: CircularProgressIndicator());
                     } else if (state is RidesHistorySuccess) {
+                      print("SuccessStage...");
                       final rides = state.ridesHistory.rides;
                       if (rides.isEmpty) {
                         return SingleChildScrollView(
@@ -396,46 +405,55 @@ class _RidesHistoriesState extends State<RidesHistories> {
                                           if (showArrow) ...[
                                             const SizedBox(width: 8),
                                             GestureDetector(
-                                              // onTap: () {
-                                              //   // Create BookingStatus from Ride
-                                              //   final bookingStatus = BookingStatus(
-                                              //     data: BookingStatusData(
-                                              //       id: ride.id,
-                                              //       bookingId: ride.bookingId,
-                                              //       pickup: ride.pickup,
-                                              //       drop: ride.drop,
-                                              //       fare: ride.fare,
-                                              //       status: ride.status,
-                                              //       otp: ride.otp,
-                                              //       driverName: ride.driverName ??
-                                              //           'Unknown Driver',
-                                              //       driverNumber:
-                                              //       ride.driverNumber ??
-                                              //           'Unknown',
-                                              //       vehicleNumber:
-                                              //       ride.vehicleNumber ??
-                                              //           'Unknown',
-                                              //       vechicleName:
-                                              //       ride.vehicleType,
-                                              //       driverPhoto:
-                                              //       ride.driverPhoto,
-                                              //       distanceKm: ride.distanceKm,
-                                              //       createdAt: ride.createdAt,
-                                              //     ),
-                                              //   );
-                                              //
-                                              //   // Navigate to RideTrackingScreen
-                                              //   Navigator.push(
-                                              //     context,
-                                              //     MaterialPageRoute(
-                                              //       builder: (context) =>
-                                              //           RideTrackingScreen(
-                                              //             bookingStatus: bookingStatus,
-                                              //             rideId: ride.id,
-                                              //           ),
-                                              //     ),
-                                              //   );
-                                              // },
+                                              onTap: () {
+                                                final bookingStatus =
+                                                    BookingStatus(
+                                                  data: Data(
+                                                    bookingId: ride.bookingId,
+                                                    pickup: ride.pickup,
+                                                    drop: ride.drop,
+                                                    fare: ride.fare,
+                                                    status: ride.status,
+                                                    otp: ride.otp,
+                                                    driverName:
+                                                        ride.driverName ??
+                                                            'Unknown Driver',
+                                                    driverNumber:
+                                                        ride.driverNumber,
+                                                    vehicleNumber:
+                                                        ride.driverVehicleNumber ??
+                                                            '',
+                                                    vechicleName:
+                                                        ride.vehicleName ?? '',
+                                                    driverPhoto:
+                                                        ride.driverImage,
+                                                    // ride.driverPhoto,
+                                                    // distanceKm: ride.distanceKm,
+                                                    // createdAt: ride.createdAt,
+                                                    pickupTime: ride.pickupTime,
+                                                    completed: ride.completed,
+                                                    paid: ride.paid,
+                                                    vehicleType:
+                                                        ride.vehicleType,
+                                                  ),
+                                                  statusCode: "",
+                                                  StatusMessage: '',
+                                                );
+
+                                                // Navigate to RideTrackingScreen
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (context) =>
+                                                        RideTrackingScreen(
+                                                      bookingStatus:
+                                                          bookingStatus,
+                                                      rideId: ride.id,
+                                                      distance: ride.distanceKm,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
                                               child: Container(
                                                 padding:
                                                     const EdgeInsets.all(8),

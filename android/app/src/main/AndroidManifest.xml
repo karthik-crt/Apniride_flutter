@@ -13,7 +13,8 @@
         android:label="Apniride User"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:enableOnBackInvokedCallback="true">
+        android:enableOnBackInvokedCallback="true"
+        android:usesCleartextTraffic="true">
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyDuMya4zkiRrzmh66-P-9_--Mfek8SXIHI"/>

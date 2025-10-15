@@ -2,11 +2,16 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:apniride_flutter/model/Updateprofile.dart';
+import 'package:apniride_flutter/model/add_ratings.dart';
+import 'package:apniride_flutter/model/add_wallet.dart';
 import 'package:apniride_flutter/model/book_ride.dart';
 import 'package:apniride_flutter/model/booking_status.dart';
 import 'package:apniride_flutter/model/cancel_ride.dart';
+import 'package:apniride_flutter/model/cashbacks_data.dart';
 import 'package:apniride_flutter/model/displayVehicles.dart';
+import 'package:apniride_flutter/model/get_wallet.dart';
 import 'package:apniride_flutter/model/invoice_data.dart';
+import 'package:apniride_flutter/model/offers_data.dart';
 import 'package:apniride_flutter/model/register_data.dart';
 import 'package:apniride_flutter/model/rides_history_data.dart';
 import 'package:apniride_flutter/utils/shared_preference.dart';
@@ -14,6 +19,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 import '../model/login_data.dart';
 import 'dart:convert';
@@ -28,7 +34,7 @@ class ApiBaseHelper {
     _navigatorKey = navigatorKey;
   }
 
-  static const _baseUrl = "http://192.168.0.12:8000/api/";
+  static const _baseUrl = "http://192.168.0.3:9000/api/";
   final Dio dio = Dio(
     BaseOptions(
       baseUrl: _baseUrl,
@@ -52,12 +58,12 @@ class ApiBaseHelper {
         var responseJson = response.data;
         return responseJson;
       case 400:
+        print("Error in case");
         throw BadRequestException(response.data.toString());
       case 401:
         throw UnAuthorisedException(response.data.toString());
       case 403:
         throw UnAuthorisedException(response.data.toString());
-
       case 500:
       default:
         throw FetchDataException(
@@ -205,7 +211,23 @@ class ApiBaseHelper {
         clearUserData();
         throw Exception('user_inactive');
       } else {
-        throw Exception(e.toString());
+        print("Else part");
+        print(apiUrl);
+        print(_baseUrl);
+        if (apiUrl == "${_baseUrl}rides/book/") {
+          Fluttertoast.showToast(
+            msg: "Driver not available in your location Try again later",
+            toastLength: Toast.LENGTH_SHORT,
+            gravity: ToastGravity.BOTTOM,
+            timeInSecForIosWeb: 2,
+            backgroundColor: Colors.red,
+            textColor: Colors.white,
+            fontSize: 16.0,
+          );
+        } else {
+          print("Error throwing here");
+          throw Exception(e.toString());
+        }
       }
     }
 
@@ -307,32 +329,32 @@ class ApiService {
   Future<LoginData> login(data) async {
     print("datsasa$data");
     final response = await _helper.post("userLogin", data);
-    print("response");
+    print("LoginResponse ${response}");
     return loginDataFromJson(response);
   }
 
   Future<UserRegister> register(data) async {
     print("datsasa$data");
     final response = await _helper.post("userRegister", data);
-    print("response");
+    print("RegisterResponse");
     return userRegisterFromJson(response);
   }
 
   Future<DisplayVehicles> displayVehicles() async {
     final response = await _helper.get("user/vehicle-types");
-    print("response ${response}");
+    print("DisplayVehicleResponse ${response}");
     return displayVehiclesFromJson(response);
   }
 
   Future<UpdateProfile> updateProfile(data) async {
     final response = await _helper.patch("profile/", data);
-    print("response ${response}");
+    print("UpdateProfileResponse ${response}");
     return updateProfileFromJson(response);
   }
 
   Future<UpdateProfile> getProfile() async {
     final response = await _helper.get("profile/");
-    print("response ${response}");
+    print("UpdateProfileResponse ${response}");
     return updateProfileFromJson(response);
   }
 
@@ -340,7 +362,7 @@ class ApiService {
     print("data ${data}");
     final response = await _helper.post("rides/book/", data);
     print("response");
-    print("responseresponse ${response}");
+    print("Book ride response ${response}");
     return bookRideFromJson(response);
   }
 
@@ -378,6 +400,40 @@ class ApiService {
     final response = await _helper.get("invoice/history/");
     print("getHistory ${response}");
     return invoiceHistoryFromJson(response);
+  }
+
+  Future<AddRatings> addRatings(int rideId, data) async {
+    print("Enter ratings Enter ratings");
+    print("data ${rideId}");
+    final response = await _helper.post("rides/${rideId}/rate/", data);
+    print("response");
+    print("ride Id ${response}");
+    return addRatingsFromJson(response);
+  }
+
+  Future<GetWallet> getWallet() async {
+    final response = await _helper.get("wallet/");
+    print("getWallet ${response}");
+    return getWalletFromJson(response);
+  }
+
+  Future<AddWallet> addWallet(data) async {
+    print("wallet$data");
+    final response = await _helper.post("wallet/deposit/", data);
+    print("walletResponse ${response}");
+    return addWalletFromJson(response);
+  }
+
+  Future<Cashbacks> getCashbacks() async {
+    final response = await _helper.get("distance-rewards/");
+    print("cashback Response ${response}");
+    return cashbacksFromJson(response);
+  }
+
+  Future<Offers> getOffers() async {
+    final response = await _helper.get("distance-rewards/");
+    print("Offers Response {${response}");
+    return offersFromJson(response);
   }
 }
 

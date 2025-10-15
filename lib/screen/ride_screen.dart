@@ -1,7 +1,13 @@
 import 'dart:ui' as ui;
 import 'dart:typed_data';
+import 'package:apniride_flutter/screen/payment_screen.dart';
+import 'package:apniride_flutter/screen/rating.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:confetti/confetti.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/services.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart'; // import 'package:apniride_flutter/Bloc/CancelRide/cancel_ride_cubit.dart';
 // import 'package:apniride_flutter/model/booking_status.dart';
 // import 'package:apniride_flutter/model/cancel_ride.dart';
@@ -503,35 +509,48 @@ import 'package:google_maps_flutter/google_maps_flutter.dart'; // import 'packag
 //   }
 // }
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:apniride_flutter/Bloc/CancelRide/cancel_ride_cubit.dart';
-import 'package:apniride_flutter/Bloc/CancelRide/cancel_ride_state.dart';
 import 'package:apniride_flutter/model/booking_status.dart';
-import 'package:apniride_flutter/screen/payment_screen.dart';
+import 'package:apniride_flutter/screen/add_wallet_screen.dart';
+import 'package:apniride_flutter/screen/payment_optinal.dart';
+import 'package:apniride_flutter/utils/api_service.dart';
 import 'package:apniride_flutter/utils/app_theme.dart';
+import 'package:apniride_flutter/utils/shared_preference.dart';
+import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:http/http.dart' as http;
-import 'package:web_socket_channel/io.dart';
-import 'dart:convert';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:web_socket_channel/io.dart';
 
 import '../Bloc/BookingStatus1/booking_status1_cubit.dart';
 import '../Bloc/BookingStatus1/booking_status1_state.dart';
-import 'bottom_bar.dart';
+import '../Bloc/CancelRide/cancel_ride_state.dart';
+import '../Bloc/Cashbacks/cashbacks_cubit.dart';
+import '../Bloc/Cashbacks/cashbacks_state.dart';
+import '../Bloc/ShowOffers/AvailableOffers/availableoffers_cubit.dart';
+import '../Bloc/ShowOffers/AvailableOffers/availableoffers_state.dart';
+import '../Bloc/Wallets/wallets_cubit.dart';
+import '../Bloc/Wallets/wallets_state.dart';
+import 'dart:math';
 
 class RideTrackingScreen extends StatefulWidget {
   final BookingStatus bookingStatus;
   final int rideId;
+  final num distance;
 
-  const RideTrackingScreen({
-    super.key,
-    required this.bookingStatus,
-    required this.rideId,
-  });
+  const RideTrackingScreen(
+      {super.key,
+      required this.bookingStatus,
+      required this.rideId,
+      required this.distance});
 
   @override
   _RideTrackingScreenState createState() => _RideTrackingScreenState();
@@ -546,19 +565,91 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
   Set<Polyline> _polylines = {};
   IOWebSocketChannel? _webSocketChannel;
   double? _previousBearing;
+  double _smoothedBearing = 0.0;
   bool _isPickupComplete = false;
   BitmapDescriptor? driverIcon;
   Timer? _statusTimer;
   late ConfettiController _confettiController;
+  String? _selectedPaymentMethod;
+  Razorpay? _razorpay;
+  bool _addingCashback = false;
+  int _waterBottles = 0;
+
+  static const double bearingSmoothingFactor =
+      0.3; // Adjust for more/less smoothing (0.0 = no smoothness, 1.0 = instant)
+  static const double proximityThresholdKm =
+      0.05; // ~50 meters threshold for auto-detecting pickup completion
+
   @override
   void initState() {
     super.initState();
+    context.read<AvailableCashbacksCubit>().getCashbacks(context);
     _initializeLocationsAndMarkers();
     _connectWebSocket();
     _loadMarkerIcon();
     _confettiController =
         ConfettiController(duration: const Duration(seconds: 3));
     _startStatusCheck();
+    _initializeRazorpay();
+    _loadPaymentMethod();
+    _initializeFirebase();
+  }
+
+  void _initializeRazorpay() {
+    _razorpay = Razorpay();
+    _razorpay!.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
+    _razorpay!.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
+    _razorpay!.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
+  }
+
+  Future<void> _initializeFirebase() async {
+    await Firebase.initializeApp();
+    await FirebaseAuth.instance.signInAnonymously();
+  }
+
+  void _openChat() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatScreen(
+          rideId: widget.rideId.toString(),
+          userType: 'user',
+        ),
+      ),
+    );
+  }
+
+  void _handlePaymentSuccess(PaymentSuccessResponse response) {
+    context
+        .read<RazorpayPaymentCubit>()
+        .addWalletAmount(widget.bookingStatus.data.fare.toDouble());
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Payment successful")),
+    );
+    _completePaymentAndCheckCashback();
+  }
+
+  void _handlePaymentError(PaymentFailureResponse response) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Payment failed: ${response.message}")),
+    );
+  }
+
+  void _handleExternalWallet(ExternalWalletResponse response) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text("External wallet selected: ${response.walletName}")),
+    );
+  }
+
+  Future<void> _loadPaymentMethod() async {
+    String? savedMethod = await SharedPreferenceHelper.getPaymentMethod();
+    if (mounted) {
+      setState(() {
+        _selectedPaymentMethod = savedMethod ?? 'COD';
+      });
+    }
+    context.read<RazorpayPaymentCubit>().getWalletBalance();
   }
 
   void _startStatusCheck() {
@@ -572,16 +663,9 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
 
   Future<void> _loadMarkerIcon() async {
     driverIcon = await getResizedMarker('assets/track1.png', 100);
-
-    /* print("vfvf");
-    driverIcon = await BitmapDescriptor.fromAssetImage(
-      const ImageConfiguration(
-        size: Size.fromHeight(0),
-      ),
-      'assets/track1.png',
-    );*/
-
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<BitmapDescriptor> getResizedMarker(String assetPath, int width) async {
@@ -593,7 +677,6 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
     final ui.FrameInfo fi = await codec.getNextFrame();
     final ByteData? resizedData =
         await fi.image.toByteData(format: ui.ImageByteFormat.png);
-
     return BitmapDescriptor.fromBytes(resizedData!.buffer.asUint8List());
   }
 
@@ -635,9 +718,11 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
         _updateCameraBounds();
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading map coordinates: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading map coordinates: $e')),
+        );
+      }
     }
   }
 
@@ -664,22 +749,23 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
           final points = data['routes'][0]['overview_polyline']['points'];
           final List<LatLng> polylineCoordinates = _decodePolyline(points);
 
-          setState(() {
-            _polylines.clear();
-            _polylines.add(Polyline(
-              polylineId: const PolylineId('route'),
-              points: polylineCoordinates,
-              color: Colors.black,
-              width: 5,
-            ));
-          });
+          if (mounted) {
+            setState(() {
+              _polylines.clear();
+              _polylines.add(Polyline(
+                polylineId: const PolylineId('route'),
+                points: polylineCoordinates,
+                color: _isPickupComplete
+                    ? Colors.green
+                    : Colors.black, // Green after pickup
+                width: 5,
+              ));
+            });
+          }
         }
       }
     } catch (e) {
-      print("Error fecthing route");
-      // ScaffoldMessenger.of(context).showSnackBar(
-      //   SnackBar(content: Text('Error fetching route: $e')),
-      // );
+      print("Error fetching route: $e");
     }
   }
 
@@ -713,47 +799,84 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
     return points;
   }
 
+  double _calculateDistance(LatLng point1, LatLng point2) {
+    const double earthRadiusKm = 6371;
+    double degToRad(double deg) => deg * (pi / 180);
+    final double dLat = degToRad(point2.latitude - point1.latitude);
+    final double dLng = degToRad(point2.longitude - point1.longitude);
+    final double a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(degToRad(point1.latitude)) *
+            cos(degToRad(point2.latitude)) *
+            sin(dLng / 2) *
+            sin(dLng / 2);
+    final double c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    return earthRadiusKm * c;
+  }
+
   void _connectWebSocket() {
     try {
       _webSocketChannel = IOWebSocketChannel.connect(
-        'ws://192.168.0.12:8000/ws/ride/${widget.rideId}/location/',
+        'ws://192.168.0.3:9000/ws/ride/${widget.rideId}/location/',
       );
 
       _webSocketChannel!.stream.listen(
         (message) {
           final data = jsonDecode(message);
           if (data['status'] == 'pickup_completed') {
-            setState(() {
-              _isPickupComplete = true;
-            });
-            _fetchRoute();
+            if (mounted) {
+              setState(() {
+                _isPickupComplete = true;
+              });
+            }
+            _fetchRoute(); // Refetch route to update to green polyline from pickup to drop
             return;
           }
-
           final double lat = double.parse(data['lat'].toString());
           final double lng = double.parse(data['lng'].toString());
           final LatLng newDriverLocation = LatLng(lat, lng);
-          print("getting driver location ${newDriverLocation}");
-          double bearing = _previousBearing ?? 0;
+          double rawBearing = _previousBearing ?? 0;
           if (_driverLocation != null) {
-            bearing = _calculateBearing(_driverLocation!, newDriverLocation);
+            rawBearing = _calculateBearing(_driverLocation!, newDriverLocation);
           }
 
-          setState(() {
-            _driverLocation = newDriverLocation;
-            _markers.removeWhere((m) => m.markerId.value == 'driver');
-            _markers.add(
-              Marker(
-                markerId: const MarkerId('driver'),
-                position: newDriverLocation,
-                icon: driverIcon ??
-                    BitmapDescriptor.defaultMarkerWithHue(
-                        BitmapDescriptor.hueBlue),
-                rotation: bearing,
-              ),
-            );
-            _previousBearing = bearing;
-          });
+          // Check proximity to pickup if not yet completed
+          if (!_isPickupComplete && _pickupLocation != null) {
+            final double distanceToPickup =
+                _calculateDistance(newDriverLocation, _pickupLocation!);
+            if (distanceToPickup <= proximityThresholdKm) {
+              print(
+                  'Driver reached pickup (distance: ${distanceToPickup * 1000} meters). Switching to drop route.');
+              if (mounted) {
+                setState(() {
+                  _isPickupComplete = true;
+                });
+              }
+              _fetchRoute(); // Switch to green polyline from pickup to drop
+              return; // Exit early after switching
+            }
+          }
+
+          // Smooth the bearing to reduce jittery rotation
+          _smoothedBearing = _smoothedBearing +
+              (rawBearing - _smoothedBearing) * bearingSmoothingFactor;
+
+          if (mounted) {
+            setState(() {
+              _driverLocation = newDriverLocation;
+              _markers.removeWhere((m) => m.markerId.value == 'driver');
+              _markers.add(
+                Marker(
+                  markerId: const MarkerId('driver'),
+                  position: newDriverLocation,
+                  icon: driverIcon ??
+                      BitmapDescriptor.defaultMarkerWithHue(
+                          BitmapDescriptor.hueBlue),
+                  rotation: _smoothedBearing, // Use smoothed bearing
+                ),
+              );
+              _previousBearing = rawBearing;
+            });
+          }
 
           if (!_isPickupComplete) {
             _fetchRoute();
@@ -795,65 +918,57 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
   }
 
   void _updateCameraBounds() {
-    if (_driverLocation != null) {
-      _mapController?.animateCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(
-            target: _driverLocation!,
-            zoom: 18.0,
-            bearing: _previousBearing ?? 0,
-          ),
+    if (_driverLocation == null) {
+      if (_pickupLocation == null || _dropoffLocation == null) return;
+
+      final bounds = LatLngBounds(
+        southwest: LatLng(
+          min(_pickupLocation!.latitude, _dropoffLocation!.latitude),
+          min(_pickupLocation!.longitude, _dropoffLocation!.longitude),
+        ),
+        northeast: LatLng(
+          max(_pickupLocation!.latitude, _dropoffLocation!.latitude),
+          max(_pickupLocation!.longitude, _dropoffLocation!.longitude),
         ),
       );
+
+      _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 20));
       return;
     }
-    if (_pickupLocation == null || _dropoffLocation == null) return;
 
-    final bounds = _driverLocation != null
-        ? LatLngBounds(
-            southwest: LatLng(
-              [
-                _pickupLocation!.latitude,
-                _driverLocation!.latitude,
-                _dropoffLocation!.latitude
-              ].reduce(min),
-              [
-                _pickupLocation!.longitude,
-                _driverLocation!.longitude,
-                _dropoffLocation!.longitude
-              ].reduce(min),
-            ),
-            northeast: LatLng(
-              [
-                _pickupLocation!.latitude,
-                _driverLocation!.latitude,
-                _dropoffLocation!.latitude
-              ].reduce(max),
-              [
-                _pickupLocation!.longitude,
-                _driverLocation!.longitude,
-                _dropoffLocation!.longitude
-              ].reduce(max),
-            ),
-          )
-        : LatLngBounds(
-            southwest: LatLng(
-              min(_pickupLocation!.latitude, _dropoffLocation!.latitude),
-              min(_pickupLocation!.longitude, _dropoffLocation!.longitude),
-            ),
-            northeast: LatLng(
-              max(_pickupLocation!.latitude, _dropoffLocation!.latitude),
-              max(_pickupLocation!.longitude, _dropoffLocation!.longitude),
-            ),
-          );
+    // Animate camera to driver location but keep map "straight" (north-up, no tilt/bearing)
+    // This prevents the map from rotating continuously
+    _mapController?.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: _driverLocation!,
+          zoom: 18.0,
+          // bearing: 0.0, // Fixed north-up (uncomment if you want no rotation at all)
+          tilt: 0.0, // No tilt for flat view
+        ),
+      ),
+    );
 
-    _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 20));
+    // Optional: If you want to follow with slight bearing but smoothed, uncomment below
+    // _mapController?.animateCamera(
+    //   CameraUpdate.newCameraPosition(
+    //     CameraPosition(
+    //       target: _driverLocation!,
+    //       zoom: 18.0,
+    //       bearing: _smoothedBearing,
+    //       tilt: 0.0,
+    //     ),
+    //   ),
+    // );
   }
 
   @override
   void dispose() {
     _webSocketChannel?.sink.close();
     _mapController?.dispose();
+    _statusTimer?.cancel();
+    _confettiController.dispose();
+    _razorpay?.clear();
     super.dispose();
   }
 
@@ -868,7 +983,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
         );
       }
     } catch (e) {
-      print(e.toString());
+      print('Error launching phone call: $e');
     }
   }
 
@@ -898,28 +1013,96 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
     }
   }
 
-  void _showSuccessDialog(BuildContext context) {
+  void _completePaymentAndCheckCashback() {
+    context.read<CashbacksCubit>().getCashbacks(context);
+  }
+
+  void _showCashbackDialog(BuildContext context, double cashback) {
+    showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              AlertDialog(
+                backgroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20.r),
+                ),
+                title: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.monetization_on,
+                      size: 50.sp,
+                      color: AppColors.background,
+                    ),
+                    SizedBox(height: 10.h),
+                    Text(
+                      "Congratulations!",
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            color: AppColors.background,
+                            fontWeight: FontWeight.bold,
+                          ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+                content: Text(
+                  "You've earned ₹${cashback.toStringAsFixed(2)} cashback for this ride. Collect it now to add to your wallet!",
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontSize: 16.sp,
+                        color: Colors.black87,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+                actions: [
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.background,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8.r),
+                      ),
+                      padding: EdgeInsets.symmetric(
+                          horizontal: 20.w, vertical: 10.h),
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _addingCashback = true;
+                      });
+                      context
+                          .read<RazorpayPaymentCubit>()
+                          .addWalletAmount(cashback);
+                    },
+                    child: const Text("Collect Now"),
+                  ),
+                ],
+                actionsAlignment: MainAxisAlignment.center, // Center the button
+              ),
+            ],
+          );
+        });
+  }
+
+  void _showSuccessDialog(BuildContext context, double walletBalance) {
+    print("Payment method ${_selectedPaymentMethod}");
+    if (_selectedPaymentMethod == 'My Wallet') {
+      _handlePayment(walletBalance);
+      return;
+    }
     _confettiController.play();
     showDialog(
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.transparent,
       builder: (context) {
-        Future.delayed(const Duration(seconds: 3), () {
-          if (mounted) {
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const BottomNavBar(currentindex: 0),
-              ),
-              (route) => false,
-            );
-          }
-        });
         return Stack(
           alignment: Alignment.center,
           children: [
             AlertDialog(
+              backgroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20.r),
               ),
@@ -931,11 +1114,62 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
                     ),
                 textAlign: TextAlign.center,
               ),
-              content: Text(
-                "Your trip has been successfully completed!",
-                style: Theme.of(context).textTheme.bodyMedium,
-                textAlign: TextAlign.center,
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "Your trip has been successfully completed!",
+                    style: Theme.of(context).textTheme.bodyMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: 10.h),
+                  Text(
+                    "Fare: ₹${widget.bookingStatus.data.fare.toStringAsFixed(2)}",
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                ],
               ),
+              actions: _selectedPaymentMethod == 'Cash'
+                  ? [
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.background,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8.r),
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _completePaymentAndCheckCashback();
+                        },
+                        child: const Text("Payment Done"),
+                      ),
+                    ]
+                  : _selectedPaymentMethod == 'Razorpay'
+                      ? [
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.background,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8.r),
+                              ),
+                            ),
+                            onPressed: () {
+                              _handlePayment(walletBalance);
+                            },
+                            child: const Text("Pay Now"),
+                          ),
+                          // TextButton(
+                          //   onPressed: () {
+                          //     Navigator.pop(context);
+                          //     _completePaymentAndCheckCashback();
+                          //   },
+                          //   child: const Text("Pay Later"),
+                          // ),
+                        ]
+                      : [], // No buttons for 'My Wallet'
             ),
             ConfettiWidget(
               confettiController: _confettiController,
@@ -956,6 +1190,49 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
         );
       },
     );
+  }
+
+  void _handlePayment(double walletBalance) {
+    if (_selectedPaymentMethod == 'My Wallet') {
+      if (walletBalance >= widget.bookingStatus.data.fare) {
+        context
+            .read<RazorpayPaymentCubit>()
+            .addWalletAmount(-widget.bookingStatus.data.fare);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Payment successful from wallet")),
+        );
+        _completePaymentAndCheckCashback();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text("Insufficient wallet balance. Please add funds.")),
+        );
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const AddWalletScreen()),
+        );
+      }
+    } else if (_selectedPaymentMethod == 'Razorpay') {
+      final options = {
+        'key': 'rzp_live_ILgsfZCZoFIKMb',
+        'amount': (widget.bookingStatus.data.fare * 100).toInt(),
+        'name': 'ApniRide',
+        'description': 'Ride Payment',
+        'prefill': {'contact': '8888888888', 'email': 'test@razorpay.com'},
+        'external': {
+          'wallets': ['paytm']
+        }
+      };
+
+      try {
+        _razorpay!.open(options);
+        _razorpay!.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error initiating payment: $e")),
+        );
+      }
+    }
   }
 
   @override
@@ -988,11 +1265,24 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
               if (state.bookingStatus.data.status == 'completed') {
                 print("This trip is completed successfully");
                 _statusTimer?.cancel();
-                _showSuccessDialog(context);
+                double walletBalance = 0.0;
+                if (context.read<RazorpayPaymentCubit>().state
+                    is RazorpayPaymentWalletFetched) {
+                  walletBalance = double.tryParse((context
+                              .read<RazorpayPaymentCubit>()
+                              .state as RazorpayPaymentWalletFetched)
+                          .wallet
+                          .data
+                          .balance) ??
+                      0.0;
+                }
+                _showSuccessDialog(context, walletBalance);
               }
-              setState(() {
-                widget.bookingStatus.data = state.bookingStatus.data;
-              });
+              if (mounted) {
+                setState(() {
+                  widget.bookingStatus.data = state.bookingStatus.data;
+                });
+              }
             } else if (state is BookingStatusError1) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -1003,352 +1293,642 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
             }
           },
         ),
-      ],
-      child: Scaffold(
-        body: Stack(
-          children: [
-            GoogleMap(
-              initialCameraPosition: const CameraPosition(
-                target: LatLng(28.7041, 77.1025),
-                zoom: 17.0,
-              ),
-              markers: _markers,
-              polylines: _polylines,
-              onMapCreated: (GoogleMapController controller) {
-                _mapController = controller;
-                _updateCameraBounds();
-              },
-              myLocationEnabled: true,
-              myLocationButtonEnabled: true,
-            ),
-            SafeArea(
-              child: Padding(
-                padding: EdgeInsets.all(10.w),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.arrow_back),
-                              onPressed: () => Navigator.pop(context),
-                            ),
-                            Text(
-                              "Back",
-                              style: TextStyle(
-                                fontSize: 16.sp,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.notifications_none),
-                          onPressed: () {},
-                        ),
-                      ],
-                    ),
-                  ],
+        BlocListener<RazorpayPaymentCubit, RazorpayPaymentState>(
+          listener: (context, state) {
+            if (state is RazorpayPaymentWalletFetched && mounted) {
+              double walletBalance =
+                  double.tryParse(state.wallet.data.balance) ?? 0.0;
+              if (_selectedPaymentMethod == 'My Wallet' && walletBalance <= 0) {
+                setState(() {
+                  _selectedPaymentMethod = 'COD';
+                  SharedPreferenceHelper.setPaymentMethod('COD');
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content:
+                        Text("Wallet balance is 0. Payment method set to COD."),
+                  ),
+                );
+              }
+            } else if (state is RazorpayPaymentSuccess) {
+              if (_addingCashback) {
+                _addingCashback = false;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content: Text("Cashback added to your wallet")),
+                );
+                Navigator.pop(context); // Close cashback dialog
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          RateExperienceScreen(rideId: widget.rideId)),
+                  (route) => false,
+                );
+              }
+            } else if (state is RazorpayPaymentFailure) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content:
+                      Text("Error fetching wallet balance: ${state.error}"),
+                  backgroundColor: Colors.red,
                 ),
+              );
+              if (_addingCashback) {
+                _addingCashback = false;
+                // Optionally pop or handle
+              }
+            }
+          },
+        ),
+        BlocListener<CashbacksCubit, CashbacksState>(
+          listener: (context, state) {
+            if (state is CashbacksSuccess) {
+              print("Cashback success");
+              double cashbackAmount = 0.0;
+              String vehicle = widget.bookingStatus.data.vehicleType ?? '';
+              num dist = widget.distance;
+              for (var rule in state.cashbacks.data) {
+                print("LoopLoop");
+                print("For cashbacks");
+                print("Dist ${dist}");
+                print("rule ${rule.vehicleType} vehicle ${vehicle}");
+                if (rule.vehicleType == vehicle &&
+                    dist >= rule.minDistance &&
+                    dist <= rule.maxDistance) {
+                  print('Satisfied');
+                  cashbackAmount = rule.cashback.toDouble();
+                  break;
+                }
+              }
+              if (cashbackAmount > 0) {
+                _showCashbackDialog(context, cashbackAmount);
+              } else {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          RateExperienceScreen(rideId: widget.rideId)),
+                  (route) => false,
+                );
+              }
+            } else if (state is CashbacksError) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(state.message)),
+              );
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(
+                    builder: (context) =>
+                        RateExperienceScreen(rideId: widget.rideId)),
+                (route) => false,
+              );
+            }
+          },
+        ),
+        BlocListener<AvailableCashbacksCubit, AvailableCashbacksState>(
+          listener: (context, state) {
+            if (state is AvailableCashbacksSuccess) {
+              print("Cashback success");
+              String vehicle = widget.bookingStatus.data.vehicleType ?? '';
+              num dist = widget.distance;
+              int waterBottles = 0;
+              print("dist ${dist}");
+              for (var rule in state.cashbacks.data) {
+                print("LoopLoop");
+                print("rule ${rule.vehicleType} vehicle ${vehicle}");
+                if (rule.vehicleType == vehicle &&
+                    dist >= rule.minDistance &&
+                    dist <= rule.maxDistance) {
+                  print("Satisfied");
+                  waterBottles = rule.waterBottles.toInt();
+                  print("waterBottles ${waterBottles}");
+                  break;
+                }
+              }
+              if (mounted) {
+                setState(() {
+                  _waterBottles = waterBottles;
+                  print("_waterBottles ${_waterBottles}");
+                });
+              }
+            } else if (state is AvailableCashbacksError) {
+              // ScaffoldMessenger.of(context).showSnackBar(
+              //   SnackBar(content: Text(state.message)),
+              // );
+              // Navigator.pushAndRemoveUntil(
+              //   context,
+              //   MaterialPageRoute(
+              //       builder: (context) =>
+              //           RateExperienceScreen(rideId: widget.rideId)),
+              //       (route) => false,
+              // );
+            }
+          },
+        ),
+      ],
+      child: WillPopScope(
+        onWillPop: () async {
+          return false;
+        },
+        child: Scaffold(
+          body: Stack(
+            children: [
+              GoogleMap(
+                initialCameraPosition: const CameraPosition(
+                  target: LatLng(28.7041, 77.1025),
+                  zoom: 17.0,
+                ),
+                markers: _markers,
+                polylines: _polylines,
+                onMapCreated: (GoogleMapController controller) {
+                  _mapController = controller;
+                  _updateCameraBounds();
+                },
+                myLocationEnabled: true,
+                myLocationButtonEnabled: true,
               ),
-            ),
-            DraggableScrollableSheet(
-              initialChildSize: 0.5,
-              minChildSize: 0.3,
-              maxChildSize: 0.9,
-              builder: (context, scrollController) {
-                return Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(20),
-                      topRight: Radius.circular(20),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.grey,
-                        spreadRadius: 0,
-                        blurRadius: 5,
-                        offset: Offset(0, -2),
+              SafeArea(
+                child: Padding(
+                  padding: EdgeInsets.all(10.w),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Row(
+                          //   children: [
+                          //     IconButton(
+                          //       icon: const Icon(Icons.arrow_back),
+                          //       onPressed: () => Navigator.pop(context),
+                          //     ),
+                          //     Text(
+                          //       "Back",
+                          //       style: TextStyle(
+                          //         fontSize: 16.sp,
+                          //         fontWeight: FontWeight.w500,
+                          //       ),
+                          //     ),
+                          //   ],
+                          // ),
+                          IconButton(
+                            icon: const Icon(Icons.notifications_none),
+                            onPressed: () {},
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                  child: SingleChildScrollView(
-                    controller: scrollController,
-                    child: SizedBox(
-                      height: 500.h,
-                      child: Padding(
-                        padding: EdgeInsets.all(10.w),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  height: 10.h,
-                                  width: 90.w,
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey,
-                                    borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              DraggableScrollableSheet(
+                initialChildSize: 0.5,
+                minChildSize: 0.3,
+                maxChildSize: 0.9,
+                builder: (context, scrollController) {
+                  return Container(
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(20),
+                        topRight: Radius.circular(20),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey,
+                          spreadRadius: 0,
+                          blurRadius: 5,
+                          offset: Offset(0, -2),
+                        ),
+                      ],
+                    ),
+                    child: SingleChildScrollView(
+                      controller: scrollController,
+                      child: SizedBox(
+                        height: 500.h,
+                        child: Padding(
+                          padding: EdgeInsets.all(10.w),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    height: 10.h,
+                                    width: 90.w,
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                            Padding(
-                              padding: EdgeInsets.only(left: 20.w, top: 20.h),
-                              child: Text(
-                                _isPickupComplete
-                                    ? "Heading to destination"
-                                    : "Your driver is coming in 3:35",
-                                style: TextStyle(
-                                  fontSize: 16.sp,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                                ],
                               ),
-                            ),
-                            if (widget.bookingStatus.data.otp != null)
                               Padding(
                                 padding: EdgeInsets.only(left: 20.w, top: 20.h),
                                 child: Text(
-                                  "Your OTP: ${widget.bookingStatus.data.otp}",
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                        fontSize: 15.sp,
-                                        color: AppColors.background,
-                                      ),
+                                  _isPickupComplete
+                                      ? "Heading to destination"
+                                      : "Distance ${widget.distance} Km",
+                                  style: TextStyle(
+                                      fontSize: 16.sp,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.green),
                                 ),
                               ),
-                            SizedBox(height: 12.h),
-                            const Divider(),
-                            Padding(
-                              padding: EdgeInsets.all(10.w),
-                              child: Row(
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: widget.bookingStatus.data
-                                                .driverPhoto !=
-                                            null
-                                        ? Image.network(
-                                            widget.bookingStatus.data
-                                                .driverPhoto!,
-                                            width: 80.w,
-                                            height: 60.h,
-                                            fit: BoxFit.cover,
-                                            errorBuilder:
-                                                (context, error, stackTrace) =>
-                                                    Image.asset(
+                              if (widget.bookingStatus.data.otp != null)
+                                Padding(
+                                  padding:
+                                      EdgeInsets.only(left: 20.w, top: 20.h),
+                                  child: Text(
+                                    "Your OTP: ${widget.bookingStatus.data.otp}",
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          fontSize: 15.sp,
+                                          color: AppColors.background,
+                                        ),
+                                  ),
+                                ),
+                              SizedBox(height: 12.h),
+                              const Divider(),
+                              Padding(
+                                padding: EdgeInsets.all(10.w),
+                                child: Row(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: widget.bookingStatus.data
+                                                  .driverPhoto !=
+                                              null
+                                          ? Image.network(
+                                              widget.bookingStatus.data
+                                                  .driverPhoto!,
+                                              width: 80.w,
+                                              height: 60.h,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error,
+                                                      stackTrace) =>
+                                                  Image.asset(
+                                                'assets/driver.png',
+                                                width: 80.w,
+                                                height: 60.h,
+                                                fit: BoxFit.cover,
+                                              ),
+                                            )
+                                          : Image.asset(
                                               'assets/driver.png',
                                               width: 80.w,
                                               height: 60.h,
                                               fit: BoxFit.cover,
                                             ),
-                                          )
-                                        : Image.asset(
-                                            'assets/driver.png',
-                                            width: 80.w,
-                                            height: 60.h,
-                                            fit: BoxFit.cover,
-                                          ),
-                                  ),
-                                  SizedBox(width: 10.w),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          widget.bookingStatus.data
-                                                  .driverName ??
-                                              "Unknown Driver",
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium
-                                              ?.copyWith(
-                                                fontSize: 13.sp,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                        ),
-                                        Text(
-                                          "Vehicle Info: ${widget.bookingStatus.data.vechicleName ?? 'Unknown'}",
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium
-                                              ?.copyWith(
-                                                fontSize: 10.sp,
-                                                color: Colors.grey.shade700,
-                                              ),
-                                        ),
-                                        Text(
-                                          "Vehicle Number: ${widget.bookingStatus.data.vehicleNumber ?? 'Unknown'}",
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium
-                                              ?.copyWith(
-                                                fontSize: 10.sp,
-                                                color: Colors.grey.shade700,
-                                              ),
-                                        ),
-                                        Text(
-                                          "Contact: ${widget.bookingStatus.data.driverNumber ?? 'Unknown'}",
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium
-                                              ?.copyWith(
-                                                fontSize: 10.sp,
-                                                color: Colors.grey.shade700,
-                                              ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Image.asset(
-                                    'assets/car.png',
-                                    width: 50.w,
-                                    height: 50.h,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const Divider(),
-                            SizedBox(height: 20.h),
-                            Padding(
-                              padding: EdgeInsets.only(left: 20.w, right: 20.w),
-                              child: Row(
-                                children: [
-                                  Text(
-                                    "Payment method",
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(fontSize: 15.sp),
-                                  ),
-                                  const Spacer(),
-                                  Text(
-                                    "₹${widget.bookingStatus.data.fare.toStringAsFixed(2)}",
-                                    style: TextStyle(
-                                      fontSize: 18.sp,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            SizedBox(height: 4.h),
-                            GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (context) =>
-                                          const PaymentsScreen()),
-                                );
-                              },
-                              child: Padding(
-                                padding: EdgeInsets.symmetric(
-                                    horizontal: 10.w, vertical: 5.h),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Container(
-                                        padding: EdgeInsets.all(8.w),
-                                        decoration: BoxDecoration(
-                                          border: Border.all(
-                                              color: Colors.grey.shade300),
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Image.asset('assets/razerpay.png',
-                                                width: 30.w),
-                                            SizedBox(width: 8.w),
-                                            Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  "**** **** **** 8970",
-                                                  style: TextStyle(
-                                                      fontSize: 15.sp),
-                                                ),
-                                                Text(
-                                                  "Expires: 12/26",
-                                                  style: TextStyle(
-                                                    fontSize: 12.sp,
-                                                    color: Colors.grey,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      ),
                                     ),
                                     SizedBox(width: 10.w),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            widget.bookingStatus.data
+                                                    .driverName ??
+                                                "Unknown Driver",
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium
+                                                ?.copyWith(
+                                                  fontSize: 13.sp,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                          ),
+                                          Text(
+                                            "Vehicle Info: ${widget.bookingStatus.data.vechicleName ?? 'Unknown'}",
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium
+                                                ?.copyWith(
+                                                  fontSize: 10.sp,
+                                                  color: Colors.grey.shade700,
+                                                ),
+                                          ),
+                                          Text(
+                                            "Vehicle Number: ${widget.bookingStatus.data.vehicleNumber ?? 'Unknown'}",
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium
+                                                ?.copyWith(
+                                                  fontSize: 10.sp,
+                                                  color: Colors.grey.shade700,
+                                                ),
+                                          ),
+                                          Text(
+                                            "Contact: ${widget.bookingStatus.data.driverNumber ?? 'Unknown'}",
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium
+                                                ?.copyWith(
+                                                  fontSize: 10.sp,
+                                                  color: Colors.grey.shade700,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Image.asset(
+                                      'assets/car.png',
+                                      width: 50.w,
+                                      height: 50.h,
+                                    ),
                                   ],
                                 ),
                               ),
-                            ),
-                            SizedBox(height: 20.h),
-                            Padding(
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 10.w, vertical: 5.h),
-                              child: Row(
-                                children: [
-                                  if (widget.bookingStatus.data.driverNumber !=
-                                      null)
-                                    GestureDetector(
-                                      onTap: () => makePhoneCall(widget
-                                          .bookingStatus.data.driverNumber!),
-                                      child: CircleAvatar(
-                                        radius: 25.r,
-                                        backgroundColor: Colors.grey.shade200,
-                                        child: Icon(Icons.call,
-                                            color: AppColors.background),
+                              const Divider(),
+                              SizedBox(height: 20.h),
+                              Padding(
+                                padding:
+                                    EdgeInsets.only(left: 20.w, right: 20.w),
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      "Payment method",
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(fontSize: 15.sp),
+                                    ),
+                                    const Spacer(),
+                                    Text(
+                                      "₹${widget.bookingStatus.data.fare.toStringAsFixed(2)}",
+                                      style: TextStyle(
+                                        fontSize: 18.sp,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
-                                  SizedBox(width: 10.w),
-                                  CircleAvatar(
-                                    radius: 25.r,
-                                    backgroundColor: Colors.grey.shade200,
-                                    child: Icon(Icons.message,
-                                        color: AppColors.background),
-                                  ),
-                                  const Spacer(),
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.red,
-                                      foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                    ),
-                                    onPressed: _cancelRide,
-                                    child: const Text("Cancel Ride"),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                            SizedBox(height: 20.h),
-                          ],
+                              SizedBox(height: 4.h),
+                              BlocBuilder<RazorpayPaymentCubit,
+                                  RazorpayPaymentState>(
+                                builder: (context, state) {
+                                  String displayMethod =
+                                      _selectedPaymentMethod ?? 'COD';
+                                  double walletBalance = 0.0;
+                                  if (state is RazorpayPaymentWalletFetched) {
+                                    walletBalance = double.tryParse(
+                                            state.wallet.data.balance) ??
+                                        0.0;
+                                  }
+                                  return GestureDetector(
+                                    onTap: () {
+                                      // Navigator.push(
+                                      //   context,
+                                      //   MaterialPageRoute(
+                                      //     builder: (context) =>
+                                      //         const PaymentOptinal(),
+                                      //   ),
+                                      // ).then((_) async {
+                                      //   if (mounted) {
+                                      //     String? updatedMethod =
+                                      //         await SharedPreferenceHelper
+                                      //             .getPaymentMethod();
+                                      //     if (updatedMethod != null &&
+                                      //         updatedMethod !=
+                                      //             _selectedPaymentMethod) {
+                                      //       setState(() {
+                                      //         _selectedPaymentMethod =
+                                      //             updatedMethod;
+                                      //       });
+                                      //     }
+                                      //     // Re-fetch wallet balance to ensure accuracy
+                                      //     context
+                                      //         .read<RazorpayPaymentCubit>()
+                                      //         .getWalletBalance();
+                                      //   }
+                                      // });
+                                    },
+                                    child: Padding(
+                                      padding: EdgeInsets.symmetric(
+                                          horizontal: 10.w, vertical: 5.h),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Expanded(
+                                            child: Container(
+                                              padding: EdgeInsets.all(8.w),
+                                              decoration: BoxDecoration(
+                                                border: Border.all(
+                                                    color:
+                                                        Colors.grey.shade300),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Image.asset(
+                                                    displayMethod == 'Razorpay'
+                                                        ? 'assets/razerpay.png'
+                                                        : displayMethod ==
+                                                                'My Wallet'
+                                                            ? 'assets/wallet.png'
+                                                            : 'assets/rupee.png',
+                                                    width: 30.w,
+                                                  ),
+                                                  SizedBox(width: 8.w),
+                                                  Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      Text(
+                                                        displayMethod,
+                                                        style: TextStyle(
+                                                            fontSize: 15.sp),
+                                                      ),
+                                                      if (displayMethod ==
+                                                          'My Wallet')
+                                                        Text(
+                                                          "Balance: ₹${walletBalance.toStringAsFixed(2)}",
+                                                          style: TextStyle(
+                                                            fontSize: 12.sp,
+                                                            color: Colors.grey,
+                                                          ),
+                                                        ),
+                                                    ],
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          SizedBox(width: 10.w),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              if (_waterBottles > 0) ...[
+                                ListTile(
+                                  leading: Image.asset("assets/bottle.png"),
+                                  title:
+                                      const Text("Free water bottle Services"),
+                                  subtitle:
+                                      const Text("Applicable for your rides"),
+                                ),
+                              ],
+                              SizedBox(height: 20.h),
+                              Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 10.w, vertical: 5.h),
+                                child: Row(
+                                  children: [
+                                    if (widget
+                                            .bookingStatus.data.driverNumber !=
+                                        null)
+                                      GestureDetector(
+                                        onTap: () => makePhoneCall(widget
+                                            .bookingStatus.data.driverNumber!),
+                                        child: CircleAvatar(
+                                          radius: 25.r,
+                                          backgroundColor: Colors.grey.shade200,
+                                          child: Icon(Icons.call,
+                                              color: AppColors.background),
+                                        ),
+                                      ),
+                                    SizedBox(width: 10.w),
+                                    // GestureDetector(
+                                    //   //onTap: _openChat,
+                                    //   onTap: (){
+                                    //     print("Chat");
+                                    //   },
+                                    //   child: CircleAvatar(
+                                    //     radius: 25.r,
+                                    //     backgroundColor: Colors.grey.shade200,
+                                    //     child: Icon(Icons.message,
+                                    //         color: AppColors.background),
+                                    //   ),
+                                    // ),
+                                    const Spacer(),
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.red,
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                      ),
+                                      onPressed: _cancelRide,
+                                      child: const Text("Cancel Ride"),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(height: 20.h),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class ChatScreen extends StatefulWidget {
+  final String rideId;
+  final String userType;
+
+  const ChatScreen({super.key, required this.rideId, required this.userType});
+
+  @override
+  _ChatScreenState createState() => _ChatScreenState();
+}
+
+class _ChatScreenState extends State<ChatScreen> {
+  final TextEditingController _messageController = TextEditingController();
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  void _sendMessage() {
+    if (_messageController.text.trim().isEmpty) return;
+
+    _firestore
+        .collection('chats')
+        .doc(widget.rideId)
+        .collection('messages')
+        .add({
+      'text': _messageController.text.trim(),
+      'sender': widget.userType,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+
+    _messageController.clear();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Chat')),
+      body: Column(
+        children: [
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: _firestore
+                  .collection('chats')
+                  .doc(widget.rideId)
+                  .collection('messages')
+                  .orderBy('timestamp', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData)
+                  return const Center(child: CircularProgressIndicator());
+                final messages = snapshot.data!.docs;
+                return ListView.builder(
+                  reverse: true,
+                  itemCount: messages.length,
+                  itemBuilder: (context, index) {
+                    final msg = messages[index].data() as Map<String, dynamic>;
+                    final isMe = msg['sender'] == widget.userType;
+                    return ListTile(
+                      title: Text(msg['text']),
+                      subtitle: Text(isMe
+                          ? 'You'
+                          : (widget.userType == 'user' ? 'Driver' : 'User')),
+                      trailing: isMe ? const Icon(Icons.person) : null,
+                    );
+                  },
                 );
               },
             ),
-          ],
-        ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _messageController,
+                    decoration:
+                        const InputDecoration(hintText: 'Type a message...'),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.send),
+                  onPressed: _sendMessage,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

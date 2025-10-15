@@ -1,9 +1,16 @@
+import 'package:apniride_flutter/Bloc/Ratings/ratings_cubit.dart';
+import 'package:apniride_flutter/Bloc/Ratings/ratings_state.dart';
 import 'package:apniride_flutter/utils/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'bottom_bar.dart';
 
 class RateExperienceScreen extends StatefulWidget {
-  const RateExperienceScreen({Key? key}) : super(key: key);
+  final int rideId;
+
+  const RateExperienceScreen({Key? key, required this.rideId})
+      : super(key: key);
 
   @override
   State<RateExperienceScreen> createState() => _RateExperienceScreenState();
@@ -14,178 +21,198 @@ class _RateExperienceScreenState extends State<RateExperienceScreen> {
   final TextEditingController _feedbackController = TextEditingController();
 
   void _submitFeedback() {
-    // if (selectedRating != null || _feedbackController.text.isNotEmpty) {
-    //   ScaffoldMessenger.of(context).showSnackBar(
-    //     SnackBar(
-    //       backgroundColor: Colors.green,
-    //       content: Text(
-    //         "Rating: ${selectedRating ?? 'No rating'}, Feedback: ${_feedbackController.text.isNotEmpty ? _feedbackController.text : 'Thanks for rating'}",
-    //       ),
-    //     ),
-    //   );
-    Navigator.pop(context);
-    // } else {
-    //   ScaffoldMessenger.of(context).showSnackBar(
-    //     const SnackBar(
-    //         content: Text("Please select a rating or write feedback")),
-    //   );
-    // }
+    if (selectedRating != null) {
+      final data = {
+        "stars": selectedRating.toString(),
+        "feedback":
+            _feedbackController.text.isNotEmpty ? _feedbackController.text : '',
+      };
+      context.read<RatingsCubit>().ratings(data, widget.rideId, context);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please select a rating")),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 10.h),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 22),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-
-                  SizedBox(height: 10.h),
-
-                  // Title
-                  Text("Rate your experience",
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(fontSize: 14.sp)),
-                ],
-              ),
-
-              SizedBox(height: 8.h),
-
-              Text(
-                "  How was your experience",
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(fontSize: 20.sp, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 7.h),
-              Text(
-                "   Your feedback helps us to improve the app",
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(fontSize: 13.sp, color: Colors.grey),
-              ),
-              SizedBox(height: 35.h),
-
-              // Rating Buttons (1–5)
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 0.w),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: List.generate(
-                    5,
-                    (index) {
-                      final rating = index + 1;
-                      final isSelected = selectedRating == rating;
-
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            selectedRating = rating;
-                          });
-                        },
-                        child: Container(
-                          width: 55,
-                          height: 55,
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? AppColors.background
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Colors.grey.shade400,
-                              width: 2,
-                            ),
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color: Colors.blue.withOpacity(0.3),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 3),
-                                    )
-                                  ]
-                                : [],
+    return BlocListener<RatingsCubit, RatingsState>(
+      listener: (context, state) {
+        if (state is RatingsSuccess) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Rating submitted successfully"),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (context) => BottomNavBar(currentindex: 0),
+            ),
+            (route) => false,
+          );
+        } else if (state is RatingsError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.message),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      },
+      child: Scaffold(
+        body: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 10.h),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 22),
+                      onPressed: () {
+                        // Allow skipping rating by navigating home
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                const BottomNavBar(currentindex: 0),
                           ),
-                          child: Center(
-                            child: Text(
-                              rating.toString(),
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                      color: isSelected
-                                          ? Colors.white
-                                          : Colors.black,
-                                      fontWeight: isSelected
-                                          ? FontWeight.bold
-                                          : FontWeight.normal),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                          (route) => false,
+                        );
+                      },
+                    ),
+                    SizedBox(height: 10.h),
+                    Text("Rate your experience",
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(fontSize: 14.sp)),
+                  ],
                 ),
-              ),
-
-              const SizedBox(height: 30),
-
-              // Feedback TextField
-              TextField(
-                controller: _feedbackController,
-                maxLines: 7,
-                decoration: InputDecoration(
-                  hintText: "Write your feedback...",
-                  hintStyle: Theme.of(context)
+                SizedBox(height: 8.h),
+                Text(
+                  "  How was your experience",
+                  style: Theme.of(context)
                       .textTheme
                       .bodyMedium
-                      ?.copyWith(color: Colors.grey.shade700),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(
-                        color: Colors.grey, width: 0), // <-- normal color
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
+                      ?.copyWith(fontSize: 20.sp, fontWeight: FontWeight.bold),
                 ),
-              ),
+                SizedBox(height: 7.h),
+                Text(
+                  "   Your feedback helps us to improve the app",
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(fontSize: 13.sp, color: Colors.grey),
+                ),
+                SizedBox(height: 35.h),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 0.w),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: List.generate(
+                      5,
+                      (index) {
+                        final rating = index + 1;
+                        final isSelected = selectedRating == rating;
 
-              const Spacer(),
-
-              // Submit Button
-              SizedBox(
-                height: 40.h,
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    backgroundColor: AppColors.background,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(13),
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              selectedRating = rating;
+                            });
+                          },
+                          child: Container(
+                            width: 55,
+                            height: 55,
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppColors.background
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.grey.shade400,
+                                width: 2,
+                              ),
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: Colors.blue.withOpacity(0.3),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      )
+                                    ]
+                                  : [],
+                            ),
+                            child: Center(
+                              child: Text(
+                                rating.toString(),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                        color: isSelected
+                                            ? Colors.white
+                                            : Colors.black,
+                                        fontWeight: isSelected
+                                            ? FontWeight.bold
+                                            : FontWeight.normal),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
-                  onPressed: _submitFeedback,
-                  child: const Text(
-                    "Submit",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 30),
+                TextField(
+                  controller: _feedbackController,
+                  maxLines: 7,
+                  decoration: InputDecoration(
+                    hintText: "Write your feedback...",
+                    hintStyle: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(color: Colors.grey.shade700),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(
+                          color: Colors.grey, width: 0), // <-- normal color
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
                   ),
                 ),
-              ),
-            ],
+                const Spacer(),
+                SizedBox(
+                  height: 40.h,
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      backgroundColor: AppColors.background,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                    ),
+                    onPressed: _submitFeedback,
+                    child: const Text(
+                      "Submit",
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

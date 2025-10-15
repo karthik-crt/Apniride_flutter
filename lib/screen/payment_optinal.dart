@@ -1,12 +1,10 @@
-import 'package:apniride_flutter/screen/home_screen.dart';
-import 'package:apniride_flutter/utils/app_theme.dart';
-import 'package:apniride_flutter/screen/add_wallet_screen.dart';
-import 'package:apniride_flutter/utils/shared_preference.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-
-import 'bottom_bar.dart';
+import '../Bloc/Wallets/wallets_cubit.dart';
+import '../Bloc/Wallets/wallets_state.dart';
+import '../utils/app_theme.dart';
+import '../utils/shared_preference.dart';
 
 class PaymentOptinal extends StatefulWidget {
   const PaymentOptinal({super.key});
@@ -23,7 +21,7 @@ class _PaymentOptinalState extends State<PaymentOptinal> {
   void initState() {
     super.initState();
     _loadSavedPaymentMethod();
-    _loadWalletBalance();
+    context.read<RazorpayPaymentCubit>().getWalletBalance();
   }
 
   Future<void> _loadSavedPaymentMethod() async {
@@ -35,43 +33,12 @@ class _PaymentOptinalState extends State<PaymentOptinal> {
     }
   }
 
-  Future<void> _loadWalletBalance() async {
-    double? balance = await SharedPreferenceHelper.getWalletBalance();
-    if (mounted) {
-      setState(() {
-        _walletBalance = balance ?? 0.0;
-        print("Loaded wallet balance: $_walletBalance");
-      });
-    }
-  }
-
   Future<void> _savePaymentMethod(String method) async {
     await SharedPreferenceHelper.setPaymentMethod(method);
     setState(() {
       _selectedPaymentMethod = method;
     });
-    print("Selected payment method: $method, Wallet balance: $_walletBalance");
-
-    if (method == 'My Wallet') {
-      if (_walletBalance == null || _walletBalance! <= 0) {
-        print(
-            "Navigating to AddWalletScreen because balance is $_walletBalance");
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const AddWalletScreen()),
-        ).then((_) {
-          _loadWalletBalance(); // Reload balance after adding wallet
-          if (mounted) {
-            setState(() {}); // Refresh UI after returning
-          }
-          Navigator.pop(context); // Return to draggable sheet
-        });
-      } else {
-        Navigator.pop(context); // Return to draggable sheet
-      }
-    } else {
-      Navigator.pop(context); // Return to draggable sheet
-    }
+    Navigator.pop(context);
   }
 
   Widget content(String text, String iconPath, {String? subtitle}) {
@@ -89,14 +56,16 @@ class _PaymentOptinalState extends State<PaymentOptinal> {
         ),
         child: ListTile(
           leading: Image.asset(iconPath),
-          title: Text(text,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15.sp,
-                    color: _selectedPaymentMethod == text
-                        ? AppColors.background
-                        : null,
-                  )),
+          title: Text(
+            text,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15.sp,
+                  color: _selectedPaymentMethod == text
+                      ? AppColors.background
+                      : null,
+                ),
+          ),
           subtitle: text == 'My Wallet' && subtitle != null
               ? Text(
                   subtitle.replaceAll(
@@ -130,78 +99,94 @@ class _PaymentOptinalState extends State<PaymentOptinal> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        Navigator.pop(
-            context); // Handle back button to return to draggable sheet
-        return false;
+    return BlocListener<RazorpayPaymentCubit, RazorpayPaymentState>(
+      listener: (context, state) {
+        if (state is RazorpayPaymentWalletFetched) {
+          setState(() {
+            _walletBalance = double.tryParse(state.wallet.data.balance) ?? 0.0;
+          });
+        } else if (state is RazorpayPaymentFailure) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Error: ${state.error}")),
+          );
+        }
       },
-      child: Scaffold(
-        appBar: AppBar(
-          automaticallyImplyLeading: false,
-          backgroundColor: Colors.white,
-          actionsPadding: EdgeInsets.all(10),
-          leading: GestureDetector(
-            onTap: () {
-              Navigator.pop(context);
-            },
-            child: Icon(
-              Icons.arrow_back_ios,
-              size: 18,
+      child: WillPopScope(
+        onWillPop: () async {
+          Navigator.pop(context);
+          return false;
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            automaticallyImplyLeading: false,
+            backgroundColor: Colors.white,
+            actionsPadding: EdgeInsets.all(10),
+            leading: GestureDetector(
+              onTap: () {
+                Navigator.pop(context);
+              },
+              child: Icon(
+                Icons.arrow_back_ios,
+                size: 18,
+              ),
             ),
-          ),
-          titleSpacing: 0,
-          title: Text("Back",
+            titleSpacing: 0,
+            title: Text(
+              "Back",
               style: Theme.of(context)
                   .textTheme
                   .bodyMedium
-                  ?.copyWith(fontSize: 14.sp)),
-          actions: [
-            GestureDetector(
-              onTap: () {
-                Navigator.pop(context); // Return to draggable sheet on skip
-              },
-              child: Text(
-                "Skip",
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: AppColors.background, fontSize: 15.sp),
-              ),
+                  ?.copyWith(fontSize: 14.sp),
             ),
-          ],
-        ),
-        body: Padding(
-          padding: EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text("How will you pay for your rides?",
+            actions: [
+              GestureDetector(
+                onTap: () {
+                  Navigator.pop(context);
+                },
+                child: Text(
+                  "Skip",
                   style: Theme.of(context)
                       .textTheme
                       .bodyMedium
-                      ?.copyWith(fontWeight: FontWeight.bold, fontSize: 15.sp)),
-              SizedBox(height: 10.h),
-              Text(
-                "Choose a digital method here and enjoy fabulous offers on your rides",
-                style: TextStyle(color: Colors.grey, fontSize: 12.sp),
+                      ?.copyWith(color: AppColors.background, fontSize: 15.sp),
+                ),
               ),
-              SizedBox(
-                height: 25.h,
-              ),
-              content("My Wallet", "assets/wallet.png",
-                  subtitle: "wallet balance :₹${_walletBalance ?? 0}"),
-              SizedBox(height: 10.h),
-              content("Cash", "assets/rupee.png"),
-              SizedBox(height: 15.h),
-              Text("Add payment Methods",
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(fontWeight: FontWeight.bold, fontSize: 16.sp)),
-              SizedBox(height: 10.h),
-              content("Razorpay", "assets/razerpay.png")
             ],
+          ),
+          body: Padding(
+            padding: EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "How will you pay for your rides?",
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.bold, fontSize: 15.sp),
+                ),
+                SizedBox(height: 10.h),
+                Text(
+                  "Choose a digital method here and enjoy fabulous offers on your rides",
+                  style: TextStyle(color: Colors.grey, fontSize: 12.sp),
+                ),
+                SizedBox(height: 25.h),
+                content("My Wallet", "assets/wallet.png",
+                    subtitle: "wallet balance: ₹${_walletBalance ?? 0}"),
+                SizedBox(height: 10.h),
+                content("Cash", "assets/rupee.png"),
+                SizedBox(height: 15.h),
+                Text(
+                  "Add payment Methods",
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.bold, fontSize: 16.sp),
+                ),
+                SizedBox(height: 10.h),
+                content("Razorpay", "assets/razerpay.png"),
+              ],
+            ),
           ),
         ),
       ),

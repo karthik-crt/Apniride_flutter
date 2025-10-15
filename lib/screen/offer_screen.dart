@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:apniride_flutter/Bloc/Offers/offers_cubit.dart';
+import 'package:apniride_flutter/model/offers_data.dart';
+
+import '../Bloc/Offers/offers_state.dart';
 
 class OffersScreen extends StatefulWidget {
   const OffersScreen({Key? key}) : super(key: key);
@@ -8,6 +13,12 @@ class OffersScreen extends StatefulWidget {
 }
 
 class _OffersScreenState extends State<OffersScreen> {
+  @override
+  void initState() {
+    super.initState();
+    context.read<OffersCubit>().getOffers(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -26,81 +37,65 @@ class _OffersScreenState extends State<OffersScreen> {
               color: Colors.black, fontSize: 18, fontWeight: FontWeight.w500),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const Text(
-            "Active Offers",
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 20),
-
-          // City Rides
-          const Text(
-            "City Rides",
-            style: TextStyle(
-                fontSize: 16, fontWeight: FontWeight.w500, color: Colors.grey),
-          ),
-          const SizedBox(height: 10),
-          offerCard(
-            title: "20% off your next 5 rides",
-            subtitle:
-                "Valid for rides within the city limits.\nOffer expires on July 31st.",
-            imageUrl: "assets/offer1.png",
-          ),
-
-          const SizedBox(height: 20),
-
-          // Tourist Rides
-          const Text(
-            "Tourist Rides",
-            style: TextStyle(
-                fontSize: 16, fontWeight: FontWeight.w500, color: Colors.grey),
-          ),
-          const SizedBox(height: 10),
-          offerCard(
-            title: "Free ride to popular tourist spots",
-            subtitle:
-                "Enjoy a complimentary ride to select tourist destinations.",
-            imageUrl: "assets/offer2.png",
-          ),
-
-          const SizedBox(height: 20),
-
-          // Long Trips
-          const Text(
-            "Long Trips",
-            style: TextStyle(
-                fontSize: 16, fontWeight: FontWeight.w500, color: Colors.grey),
-          ),
-          const SizedBox(height: 10),
-          offerCard(
-            title: "Discounted rates for long-distance travel",
-            subtitle: "Get up to 15% off on rides exceeding 50 miles.",
-            imageUrl: "assets/offer1.png",
-          ),
-
-          const SizedBox(height: 30),
-
-          // Eligibility Section
-          const Text(
-            "Eligibility",
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-
-          _eligibilityTile(
-            icon: Icons.directions_car,
-            title: "Ride Frequency",
-            subtitle: "You've taken 12 rides this month",
-          ),
-          const SizedBox(height: 12),
-          _eligibilityTile(
-            icon: Icons.star_border,
-            title: "Rider Rating",
-            subtitle: "Your average rating is 4.8 stars",
-          ),
-        ],
+      body: BlocBuilder<OffersCubit, OffersState>(
+        builder: (context, state) {
+          if (state is OffersLoading) {
+            return const Center(child: CircularProgressIndicator());
+          } else if (state is OffersSuccess) {
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                const Text(
+                  "Active Offers",
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 20),
+                // City Rides
+                const Text(
+                  "Available Offers",
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey),
+                ),
+                const SizedBox(height: 10),
+                ...state.offersData.data.map((offer) => Column(
+                      children: [
+                        offerCard(
+                          title:
+                              "${offer.cashback}% Cashback on ${offer.vehicleType} rides",
+                          subtitle:
+                              "For distances between ${offer.minDistance} and ${offer.maxDistance} km\n${offer.waterBottles > 0 ? "${offer.waterBottles} Water Bottle${offer.waterBottles > 1 ? 's' : ''}" : ''}${offer.discount.isNotEmpty ? '\n${offer.discount}' : ''}",
+                          imageUrl: "assets/car.png",
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                    )),
+                const SizedBox(height: 30),
+                // Eligibility Section
+                const Text(
+                  "Eligibility",
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                _eligibilityTile(
+                  icon: Icons.directions_car,
+                  title: "Ride Frequency",
+                  subtitle: "You've taken 12 rides this month",
+                ),
+                const SizedBox(height: 12),
+                _eligibilityTile(
+                  icon: Icons.star_border,
+                  title: "Rider Rating",
+                  subtitle: "Your average rating is 4.8 stars",
+                ),
+              ],
+            );
+          } else if (state is OffersError) {
+            return Center(child: Text(state.message));
+          }
+          return const Center(child: Text("No offers available"));
+        },
       ),
     );
   }
@@ -122,22 +117,16 @@ class _OffersScreenState extends State<OffersScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 6),
                 Text(
                   subtitle,
                   style: const TextStyle(fontSize: 14, color: Colors.grey),
                 ),
-                SizedBox(height: 10),
-                Container(
-                  padding: EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.grey)),
-                  child: Text("View Details"),
-                )
               ],
             ),
           ),
@@ -148,7 +137,8 @@ class _OffersScreenState extends State<OffersScreen> {
               imageUrl,
               width: 90,
               height: 150,
-              //fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) =>
+                  Image.asset('assets/car.png'),
             ),
           ),
         ],
@@ -175,12 +165,15 @@ class _OffersScreenState extends State<OffersScreen> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title,
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            ),
             const SizedBox(height: 2),
-            Text(subtitle,
-                style: const TextStyle(fontSize: 14, color: Colors.grey)),
+            Text(
+              subtitle,
+              style: const TextStyle(fontSize: 14, color: Colors.grey),
+            ),
           ],
         ),
       ],

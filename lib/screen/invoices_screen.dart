@@ -18,7 +18,7 @@ class InvoicesHistoryScreen extends StatefulWidget {
 }
 
 class _InvoicesHistoryScreenState extends State<InvoicesHistoryScreen> {
-  static const String baseUrl = 'http://192.168.0.12:8000/api';
+  static const String baseUrl = 'http://192.168.0.3:9000/api';
 
   @override
   void initState() {

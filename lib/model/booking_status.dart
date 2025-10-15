@@ -42,6 +42,7 @@ class Data {
     required this.fare,
     required this.completed,
     required this.paid,
+    required this.vehicleType,
   });
   late final String bookingId;
   late final String status;
@@ -57,6 +58,7 @@ class Data {
   late final double fare;
   late final bool completed;
   late final bool paid;
+  late final String vehicleType;
 
   Data.fromJson(Map<String, dynamic> json) {
     bookingId = json['booking_id'];
@@ -73,6 +75,7 @@ class Data {
     fare = json['fare'];
     completed = json['completed'];
     paid = json['paid'];
+    vehicleType = json['vehicle_type'] ?? "";
   }
 
   Map<String, dynamic> toJson() {
@@ -91,6 +94,7 @@ class Data {
     _data['fare'] = fare;
     _data['completed'] = completed;
     _data['paid'] = paid;
+    _data['vehicle_type'] = vehicleType;
     return _data;
   }
 }

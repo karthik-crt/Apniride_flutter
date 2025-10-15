@@ -40,6 +40,10 @@ class Ride {
     required this.id,
     required this.username,
     required this.driverName,
+    required this.driverNumber,
+    required this.driverVehicleNumber,
+    required this.driverImage,
+    required this.vehicleName,
     required this.bookingId,
     required this.pickup,
     required this.drop,
@@ -73,6 +77,10 @@ class Ride {
   final int id;
   final String username;
   final String driverName;
+  final String driverNumber;
+  final String driverVehicleNumber;
+  final String driverImage;
+  final String vehicleName;
   final String bookingId;
   final String pickup;
   final String drop;
@@ -107,6 +115,10 @@ class Ride {
       id: json['id'] ?? 0,
       username: json['username'] ?? '',
       driverName: json['driver_name'] ?? '',
+      driverNumber: json['driver_number'] ?? '',
+      driverVehicleNumber: json['driver_vehicle_number'] ?? '',
+      driverImage: json['driver_image'] ?? '',
+      vehicleName: json['vehicle_name'] ?? '',
       bookingId: json['booking_id'] ?? '',
       pickup: json['pickup'] ?? '',
       drop: json['drop'] ?? '',
@@ -143,6 +155,10 @@ class Ride {
     data['id'] = id;
     data['username'] = username;
     data['driver_name'] = driverName;
+    data['driver_number'] = driverNumber;
+    data['driver_vehicle_number'] = driverVehicleNumber;
+    data['driver_image'] = driverImage;
+    data['vehicle_name'] = vehicleName;
     data['booking_id'] = bookingId;
     data['pickup'] = pickup;
     data['drop'] = drop;

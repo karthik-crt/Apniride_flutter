@@ -170,13 +170,14 @@ class _CreateaccountState extends State<Createaccount> {
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
                             decoration: InputDecoration(
-                              hintText: "Email (Optional)",
+                              hintText: "Email",
                               hintStyle: Theme.of(context)
                                   .textTheme
                                   .bodyMedium
                                   ?.copyWith(
-                                      color: Colors.grey,
-                                      fontWeight: FontWeight.bold),
+                                    color: Colors.grey,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
                               ),
@@ -201,15 +202,17 @@ class _CreateaccountState extends State<Createaccount> {
                               ),
                             ),
                             validator: (value) {
-                              if (value != null && value.trim().isEmpty) {
-                                if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                                    .hasMatch(value.trim())) {
-                                  return 'Please enter a valid email address';
-                                }
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Please enter your email address';
+                              }
+                              // ✅ Email format check
+                              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                                  .hasMatch(value.trim())) {
+                                return 'Please enter a valid email address';
                               }
                               return null;
                             },
-                          ),
+                          )
                         ],
                       ),
                     ),

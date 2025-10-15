@@ -26,12 +26,13 @@ class _PermissionScreenState extends State<PermissionScreen> {
     // ScaffoldMessenger.of(context).showSnackBar(
     //   const SnackBar(content: Text("Permissions granted successfully")),
     // );
-    Navigator.push(
-        context,
-        MaterialPageRoute(
-            builder: (context) => BottomNavBar(
-                  currentindex: 0,
-                )));
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (context) => BottomNavBar(currentindex: 0),
+      ),
+      (Route<dynamic> route) => false, // removes all previous routes
+    );
   }
 
   @override

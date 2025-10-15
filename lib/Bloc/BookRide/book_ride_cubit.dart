@@ -1,3 +1,4 @@
+// lib/Bloc/BookRide/book_ride_cubit.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -9,11 +10,12 @@ class BookRideCubit extends Cubit<BookRideState> {
 
   BookRideCubit(this.apiService) : super(BookRideInitial());
 
-  Future<void> bookRides(data, context) async {
+  Future<void> bookRides(data, BuildContext context,
+      {bool isScheduleRide = false}) async {
     emit(BookRideLoading());
     try {
       final bookRide = await apiService.bookRide(data);
-      print("Fetched profile: $bookRide");
+      print("Booking cab $bookRide");
       if (bookRide.statusCode != 1) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(bookRide.statusMessage)),
@@ -21,7 +23,7 @@ class BookRideCubit extends Cubit<BookRideState> {
         emit(BookRideError(bookRide.statusMessage));
       } else {
         print("Book ride Book ride success");
-        emit(BookRideSuccess(bookRide));
+        emit(BookRideSuccess(bookRide, isScheduleRide: isScheduleRide));
       }
     } catch (e) {
       print("Fetch ride error: $e");

@@ -233,12 +233,14 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'dart:math';
 
 import '../Bloc/BookingStatus/booking_status_state.dart';
+import '../Bloc/CancelRide/cancel_ride_cubit.dart';
 
 class SearchingDriverScreen extends StatefulWidget {
   final LatLng? pickupLocation;
   final String? pickupAddress;
   final String bookingId;
   final int rideId;
+  final num distance;
 
   const SearchingDriverScreen({
     super.key,
@@ -246,6 +248,7 @@ class SearchingDriverScreen extends StatefulWidget {
     this.pickupAddress,
     required this.bookingId,
     required this.rideId,
+    required this.distance
   });
 
   @override
@@ -335,7 +338,7 @@ class _SearchingDriverScreenState extends State<SearchingDriverScreen>
             context,
             MaterialPageRoute(
               builder: (context) => RideTrackingScreen(
-                  bookingStatus: state.bookingStatus, rideId: widget.rideId),
+                  bookingStatus: state.bookingStatus, rideId: widget.rideId,distance:widget.distance),
             ),
           );
         } else if (state is BookingStatusError) {
@@ -388,7 +391,11 @@ class _SearchingDriverScreenState extends State<SearchingDriverScreen>
               right: 20.w,
               child: ElevatedButton(
                 onPressed: () {
+                  print("Cancel the ride");
                   _timer?.cancel();
+                  context
+                      .read<CancelRideCubit>()
+                      .cancelRides(context, widget.rideId);
                   Navigator.pop(context);
                 },
                 style: ElevatedButton.styleFrom(
