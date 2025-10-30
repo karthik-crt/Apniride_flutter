@@ -21,6 +21,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 
+import '../model/WalletHistory_data.dart';
 import '../model/login_data.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -34,7 +35,10 @@ class ApiBaseHelper {
     _navigatorKey = navigatorKey;
   }
 
-  static const _baseUrl = "http://192.168.0.3:9000/api/";
+  static const _baseUrl = "https://api.apniride.org/api/";
+
+  // static const _baseUrl = "http://192.168.0.10:9000/api/";
+
   final Dio dio = Dio(
     BaseOptions(
       baseUrl: _baseUrl,
@@ -224,7 +228,7 @@ class ApiBaseHelper {
             textColor: Colors.white,
             fontSize: 16.0,
           );
-        } else {
+          // } else {
           print("Error throwing here");
           throw Exception(e.toString());
         }
@@ -313,6 +317,7 @@ class ApiService {
   }
 
   final ApiBaseHelper _helper = ApiBaseHelper();
+
   // Future<AppData> getAppData() async {
   //   print("objectaas");
   //   final body = {};
@@ -424,9 +429,15 @@ class ApiService {
     return addWalletFromJson(response);
   }
 
+  Future<WalletHistory> getWalletHistory() async {
+    final response = await _helper.get("driver/wallet/transactions/");
+    print("Wallet History data {${response}");
+    return walletHistoryFromJson(response);
+  }
+
   Future<Cashbacks> getCashbacks() async {
     final response = await _helper.get("distance-rewards/");
-    print("cashback Response ${response}");
+    print("cashbackk Response ${response}");
     return cashbacksFromJson(response);
   }
 

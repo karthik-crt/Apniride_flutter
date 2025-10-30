@@ -362,11 +362,11 @@ class _AddWalletScreenState extends State<AddWalletScreen> {
     _razorpay = Razorpay();
 
     final options = {
-      'key': 'rzp_live_ILgsfZCZoFIKMb',
+      'key': 'rzp_test_RWneIBNQYQoNVc',
       'amount': (amount * 100).toInt(), // Amount in paise
       'name': 'ApniRide',
       'description': 'Add money to wallet',
-      'prefill': {'contact': '8888888888', 'email': 'test@razorpay.com'},
+      //'prefill': {'contact': '8888888888', 'email': 'test@razorpay.com'},
       'external': {
         'wallets': ['paytm']
       }

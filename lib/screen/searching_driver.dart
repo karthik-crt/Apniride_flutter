@@ -242,14 +242,13 @@ class SearchingDriverScreen extends StatefulWidget {
   final int rideId;
   final num distance;
 
-  const SearchingDriverScreen({
-    super.key,
-    this.pickupLocation,
-    this.pickupAddress,
-    required this.bookingId,
-    required this.rideId,
-    required this.distance
-  });
+  const SearchingDriverScreen(
+      {super.key,
+      this.pickupLocation,
+      this.pickupAddress,
+      required this.bookingId,
+      required this.rideId,
+      required this.distance});
 
   @override
   State<SearchingDriverScreen> createState() => _SearchingDriverScreenState();
@@ -274,9 +273,10 @@ class _SearchingDriverScreenState extends State<SearchingDriverScreen>
 
     // Start polling the booking status every 3 seconds
     _timer = Timer.periodic(const Duration(seconds: 3), (timer) {
-      context
+      final data = context
           .read<BookingStatusCubit>()
           .fetchBookingStatus(context, widget.bookingId);
+      final latLang = context.read<BookingStatusCubit>().state;
     });
   }
 
@@ -338,7 +338,9 @@ class _SearchingDriverScreenState extends State<SearchingDriverScreen>
             context,
             MaterialPageRoute(
               builder: (context) => RideTrackingScreen(
-                  bookingStatus: state.bookingStatus, rideId: widget.rideId,distance:widget.distance),
+                  bookingStatus: state.bookingStatus,
+                  rideId: widget.rideId,
+                  distance: widget.distance),
             ),
           );
         } else if (state is BookingStatusError) {

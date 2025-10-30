@@ -235,20 +235,20 @@ class _RidesHistoriesState extends State<RidesHistories> {
               padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
               child: Row(
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back_ios, size: 22),
-                    onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) =>
-                                BottomNavBar(currentindex: 0))),
-                  ),
+                  // IconButton(
+                  //   icon: const Icon(Icons.arrow_back_ios, size: 22),
+                  //   onPressed: () => Navigator.push(
+                  //       context,
+                  //       MaterialPageRoute(
+                  //           builder: (context) =>
+                  //               BottomNavBar(currentindex: 0))),
+                  // ),
                   const SizedBox(width: 5),
                   Text(
-                    "Back",
+                    "Rides",
                     style: textTheme?.copyWith(
                       fontSize: 18,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ],

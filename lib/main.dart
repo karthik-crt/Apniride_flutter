@@ -11,10 +11,12 @@ import 'package:apniride_flutter/Bloc/RidesHistory/rides_history_cubit.dart';
 import 'package:apniride_flutter/Bloc/ShowOffers/AvailableOffers/availableoffers_cubit.dart';
 import 'package:apniride_flutter/Bloc/UpdateProfile/update_profile_cubit.dart';
 import 'package:apniride_flutter/Bloc/UserRegister/register_cubit.dart';
+import 'package:apniride_flutter/Bloc/WalletHistory/wallet_history_cubit.dart';
 import 'package:apniride_flutter/Bloc/Wallets/wallets_cubit.dart';
 import 'package:apniride_flutter/model/booking_status.dart';
 import 'package:apniride_flutter/screen/SplashScreen.dart';
 import 'package:apniride_flutter/screen/rides_history.dart';
+import 'package:apniride_flutter/screen/wallet_history_screen.dart';
 import 'package:apniride_flutter/utils/api_service.dart';
 import 'package:apniride_flutter/utils/app_theme.dart';
 import 'package:apniride_flutter/utils/notification_service.dart';
@@ -29,55 +31,115 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'Bloc/LoginCubit/login_cubit.dart';
 import 'firebase_options.dart';
 
+// final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+// @pragma('vm:entry-point')
+// Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+//   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+//   print("BG message: ${message.data}");
+// }
+//
+// Future<void> main() async {
+//   WidgetsFlutterBinding.ensureInitialized();
+//   await Firebase.initializeApp(
+//     options: DefaultFirebaseOptions.currentPlatform,
+//   );
+//   await SharedPreferenceHelper.init();
+//   String? token = await FirebaseMessaging.instance.getToken();
+//   if (token != null) {
+//     print("FCM Token: $token");
+//     SharedPreferenceHelper.setFcmToken(token);
+//   }
+//   await NotificationService.init(navigatorKey);
+//   FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
+//     print(" Refreshed FCM Token: $newToken");
+//     SharedPreferenceHelper.setFcmToken(newToken);
+//   });
+//   await NotificationService.init(navigatorKey);
+//   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+//   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+//     print("Foreground message: ${message.data}");
+//     NotificationService.showNotification(message);
+//   });
+//
+//   FirebaseMessaging.instance.getInitialMessage().then((message) {
+//     print("MessageMessage ${message}");
+//     if (message != null) {
+//       final data = message.data;
+//       print("Initial message data: $data");
+//       navigatorKey.currentState?.push(
+//         MaterialPageRoute(builder: (context) => RidesHistories()),
+//       );
+//     }
+//   });
+//   FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+//     if (message != null) {
+//       final data = message.data;
+//       print("Initial message data: $data");
+//       navigatorKey.currentState?.push(
+//         MaterialPageRoute(builder: (context) => RidesHistories()),
+//       );
+//     }
+//   });
+//   await SystemChrome.setPreferredOrientations([
+//     DeviceOrientation.portraitUp,
+//     DeviceOrientation.portraitDown,
+//   ]);
+//
+//   runApp(const MyApp());
+// }
+
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  print("BG message: ${message.data}");
+  debugPrint('Background message received: ${message.data}');
 }
 
-Future<void> main() async {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await SharedPreferenceHelper.init();
-  String? token = await FirebaseMessaging.instance.getToken();
-  if (token != null) {
-    print("FCM Token: $token");
-    SharedPreferenceHelper.setFcmToken(token);
-  }
-  await NotificationService.init(navigatorKey);
-  FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
-    print(" Refreshed FCM Token: $newToken");
-    SharedPreferenceHelper.setFcmToken(newToken);
-  });
   await NotificationService.init(navigatorKey);
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  NotificationSettings settings = await FirebaseMessaging.instance
+      .requestPermission(alert: true, badge: true, sound: true);
+  debugPrint('User granted permission: ${settings.authorizationStatus}');
+
+  String? token = await FirebaseMessaging.instance.getToken();
+  if (token != null) {
+    debugPrint('FCMToken: $token');
+    SharedPreferenceHelper.setFcmToken(token);
+  }
+
+  FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
+    debugPrint('Refreshed FCM Token: $newToken');
+    SharedPreferenceHelper.setFcmToken(newToken);
+  });
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-    print("Foreground message: ${message.data}");
+    debugPrint('Foreground message: ${message.data}');
     NotificationService.showNotification(message);
   });
 
   FirebaseMessaging.instance.getInitialMessage().then((message) {
-    print("MessageMessage ${message}");
     if (message != null) {
       final data = message.data;
-      print("Initial message data: $data");
+      debugPrint('getInitialMessage data: $data');
       navigatorKey.currentState?.push(
         MaterialPageRoute(builder: (context) => RidesHistories()),
       );
     }
   });
+
   FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-    if (message != null) {
-      final data = message.data;
-      print("Initial message data: $data");
-      navigatorKey.currentState?.push(
-        MaterialPageRoute(builder: (context) => RidesHistories()),
-      );
-    }
+    final data = message.data;
+    debugPrint('onMessageOpenedApp data: $data');
+    navigatorKey.currentState?.push(
+      MaterialPageRoute(builder: (context) => RidesHistories()),
+    );
   });
+
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -133,6 +195,9 @@ class MyApp extends StatelessWidget {
           BlocProvider(
               create: (context) =>
                   AvailableCashbacksCubit(context.read<ApiService>())),
+          BlocProvider(
+              create: (context) =>
+                  WalletHistoryCubit(context.read<ApiService>())),
         ],
         child: ScreenUtilInit(
           designSize: const Size(360, 690),

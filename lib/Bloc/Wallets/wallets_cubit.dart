@@ -21,8 +21,9 @@ class RazorpayPaymentCubit extends Cubit<RazorpayPaymentState> {
   Future<void> addWalletAmount(double amount) async {
     try {
       emit(RazorpayPaymentLoading());
-      final response =
-          await apiService.addWallet({"amount": amount.toString()});
+      final response = await apiService.addWallet({
+        "amount": amount.toString(),
+      });
       emit(RazorpayPaymentSuccess(response));
     } catch (e) {
       emit(RazorpayPaymentFailure(e.toString()));

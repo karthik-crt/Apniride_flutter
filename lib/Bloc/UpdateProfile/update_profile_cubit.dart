@@ -40,6 +40,7 @@ class UpdateProfileCubit extends Cubit<UpdateProfileState> {
         );
         emit(UpdateProfileError(profileData.statusMessage));
       } else {
+
         emit(UpdateProfileSuccess(profileData));
       }
     } catch (e) {

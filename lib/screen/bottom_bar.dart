@@ -4,6 +4,7 @@ import 'package:apniride_flutter/screen/rides_history.dart';
 import 'package:apniride_flutter/utils/app_theme.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'home_screen.dart';
@@ -11,6 +12,7 @@ import 'offer_screen.dart';
 
 class BottomNavBar extends StatefulWidget {
   final int currentindex;
+
   // final String selectedLocation;
   const BottomNavBar({super.key, required this.currentindex});
 
@@ -44,138 +46,168 @@ class _BottomNavBarState extends State<BottomNavBar> {
   }
 
   void _onItemTapped(int index) {
+    print("_selectedIndex");
+    print(_selectedIndex);
     setState(() {
       _selectedIndex = index;
     });
   }
 
+  Future<bool> _onWillPop() async {
+    print(_selectedIndex);
+    print("_selectedIndex");
+    if (_selectedIndex != 0) {
+      setState(() {
+        _selectedIndex = 0;
+      });
+      return false;
+    } else {
+      SystemNavigator.pop();
+      return false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-            color: Color(0xFFF5F6F7), borderRadius: BorderRadius.circular(40)),
-        child: Padding(
-          padding: EdgeInsets.all(18),
-          child: BottomNavigationBar(
-            selectedLabelStyle: TextStyle(
-              fontSize: 12.sp,
-              fontWeight: FontWeight.bold,
-              //fontFamily: ApplicationFont.MulishFontFamily,
+    return WillPopScope(
+      onWillPop: () async {
+        if (_selectedIndex != 0) {
+          setState(() {
+            _selectedIndex = 0;
+          });
+          return false;
+        } else {
+          SystemNavigator.pop();
+          return false;
+        }
+      },
+      child: Scaffold(
+        bottomNavigationBar: Container(
+          decoration: BoxDecoration(
+              // color: Color(0xFFF5F6F7),
+              borderRadius: BorderRadius.circular(40)),
+          child: Padding(
+            padding: EdgeInsets.all(10),
+            child: BottomNavigationBar(
+              selectedLabelStyle: TextStyle(
+                fontSize: 12.sp,
+                fontWeight: FontWeight.bold,
+                //fontFamily: ApplicationFont.MulishFontFamily,
+              ),
+              unselectedLabelStyle: TextStyle(
+                fontSize: 10.sp,
+                color: Colors.black,
+                fontWeight: FontWeight.w400,
+                //fontFamily: ApplicationFont.MulishFontFamily,
+              ),
+              backgroundColor: Colors.white,
+              showUnselectedLabels: true,
+              elevation: 0.0,
+              enableFeedback: false,
+              type: BottomNavigationBarType.fixed,
+              items: [
+                BottomNavigationBarItem(
+                    icon: _selectedIndex == 0
+                        ? Padding(
+                            padding: EdgeInsets.only(bottom: 2),
+                            child: Image.asset(
+                              "assets/home.png",
+                              height: 20.h,
+                              color: _selectedIndex == 0
+                                  ? AppColors.background
+                                  : Colors.grey,
+                            ),
+                          )
+                        : Padding(
+                            padding: EdgeInsets.only(bottom: 2),
+                            child: Image.asset(
+                              "assets/home.png",
+                              height: 20.h,
+                              color: _selectedIndex == 0
+                                  ? AppColors.background
+                                  : Colors.grey,
+                            ),
+                          ),
+                    label: 'Home'),
+                BottomNavigationBarItem(
+                    icon: _selectedIndex == 1
+                        ? Padding(
+                            padding: EdgeInsets.only(bottom: 2),
+                            child: Image.asset(
+                              "assets/ride.png",
+                              height: 20.h,
+                              color: _selectedIndex == 1
+                                  ? AppColors.background
+                                  : Colors.grey,
+                            ),
+                          )
+                        : Padding(
+                            padding: EdgeInsets.only(bottom: 2),
+                            child: Image.asset(
+                              "assets/ride.png",
+                              height: 20.h,
+                              color: _selectedIndex == 1
+                                  ? AppColors.background
+                                  : Colors.grey,
+                            ),
+                          ),
+                    label: 'Ride'),
+                BottomNavigationBarItem(
+                    icon: _selectedIndex == 2
+                        ? Padding(
+                            padding: EdgeInsets.only(bottom: 2),
+                            child: Image.asset(
+                              "assets/offer.png",
+                              height: 20.h,
+                              color: _selectedIndex == 2
+                                  ? AppColors.background
+                                  : Colors.grey,
+                            ),
+                          )
+                        : Padding(
+                            padding: EdgeInsets.only(bottom: 2),
+                            child: Image.asset(
+                              "assets/offer.png",
+                              height: 20.h,
+                              color: _selectedIndex == 2
+                                  ? AppColors.background
+                                  : Colors.grey,
+                            ),
+                          ),
+                    label: 'Offer'),
+                BottomNavigationBarItem(
+                    icon: _selectedIndex == 3
+                        ? Padding(
+                            padding: EdgeInsets.only(bottom: 2),
+                            child: Image.asset(
+                              "assets/profile.png",
+                              height: 20.h,
+                              color: _selectedIndex == 3
+                                  ? AppColors.background
+                                  : Colors.grey,
+                            ),
+                          )
+                        : Padding(
+                            padding: EdgeInsets.only(bottom: 2),
+                            child: Image.asset(
+                              "assets/profile.png",
+                              height: 20.h,
+                              color: _selectedIndex == 3
+                                  ? AppColors.background
+                                  : Colors.grey,
+                            ),
+                          ),
+                    label: 'Profile'),
+              ],
+              currentIndex: _selectedIndex,
+              selectedItemColor: AppColors.background,
+              onTap: _onItemTapped,
             ),
-            unselectedLabelStyle: TextStyle(
-              fontSize: 10.sp,
-              color: Colors.black,
-              fontWeight: FontWeight.w400,
-              //fontFamily: ApplicationFont.MulishFontFamily,
-            ),
-            backgroundColor: Colors.white,
-            showUnselectedLabels: true,
-            elevation: 0.0,
-            enableFeedback: false,
-            type: BottomNavigationBarType.fixed,
-            items: [
-              BottomNavigationBarItem(
-                  icon: _selectedIndex == 0
-                      ? Padding(
-                          padding: EdgeInsets.only(bottom: 2),
-                          child: Image.asset(
-                            "assets/home.png",
-                            height: 20.h,
-                            color: _selectedIndex == 0
-                                ? AppColors.background
-                                : Colors.grey,
-                          ),
-                        )
-                      : Padding(
-                          padding: EdgeInsets.only(bottom: 2),
-                          child: Image.asset(
-                            "assets/home.png",
-                            height: 20.h,
-                            color: _selectedIndex == 0
-                                ? AppColors.background
-                                : Colors.grey,
-                          ),
-                        ),
-                  label: 'Home'),
-              BottomNavigationBarItem(
-                  icon: _selectedIndex == 1
-                      ? Padding(
-                          padding: EdgeInsets.only(bottom: 2),
-                          child: Image.asset(
-                            "assets/ride.png",
-                            height: 20.h,
-                            color: _selectedIndex == 1
-                                ? AppColors.background
-                                : Colors.grey,
-                          ),
-                        )
-                      : Padding(
-                          padding: EdgeInsets.only(bottom: 2),
-                          child: Image.asset(
-                            "assets/ride.png",
-                            height: 20.h,
-                            color: _selectedIndex == 1
-                                ? AppColors.background
-                                : Colors.grey,
-                          ),
-                        ),
-                  label: 'Ride'),
-              BottomNavigationBarItem(
-                  icon: _selectedIndex == 2
-                      ? Padding(
-                          padding: EdgeInsets.only(bottom: 2),
-                          child: Image.asset(
-                            "assets/offer.png",
-                            height: 20.h,
-                            color: _selectedIndex == 2
-                                ? AppColors.background
-                                : Colors.grey,
-                          ),
-                        )
-                      : Padding(
-                          padding: EdgeInsets.only(bottom: 2),
-                          child: Image.asset(
-                            "assets/offer.png",
-                            height: 20.h,
-                            color: _selectedIndex == 2
-                                ? AppColors.background
-                                : Colors.grey,
-                          ),
-                        ),
-                  label: 'Offer'),
-              BottomNavigationBarItem(
-                  icon: _selectedIndex == 3
-                      ? Padding(
-                          padding: EdgeInsets.only(bottom: 2),
-                          child: Image.asset(
-                            "assets/profile.png",
-                            height: 20.h,
-                            color: _selectedIndex == 3
-                                ? AppColors.background
-                                : Colors.grey,
-                          ),
-                        )
-                      : Padding(
-                          padding: EdgeInsets.only(bottom: 2),
-                          child: Image.asset(
-                            "assets/profile.png",
-                            height: 20.h,
-                            color: _selectedIndex == 3
-                                ? AppColors.background
-                                : Colors.grey,
-                          ),
-                        ),
-                  label: 'Profile'),
-            ],
-            currentIndex: _selectedIndex,
-            selectedItemColor: AppColors.background,
-            onTap: _onItemTapped,
           ),
         ),
-      ),
-      body: Center(
-        child: _widgetOptions.elementAt(_selectedIndex),
+        body: Center(
+          child: _widgetOptions.elementAt(_selectedIndex),
+        ),
       ),
     );
   }

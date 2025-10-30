@@ -112,6 +112,14 @@ class SharedPreferenceHelper {
     return getString("fcm_token");
   }
 
+  static void setUserName(String token) {
+    setString("user_name", token);
+  }
+
+  static String? getUserName() {
+    return getString("user_name");
+  }
+
   static const String _paymentMethodKey = 'selected_payment_method';
   static const String _walletBalanceKey = 'wallet_balance';
 

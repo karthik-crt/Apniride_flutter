@@ -7,6 +7,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart' as dio;
+import 'package:share_plus/share_plus.dart';
+
+import '../utils/shared_preference.dart';
 
 class ProfileManagementScreen extends StatefulWidget {
   const ProfileManagementScreen({super.key});
@@ -19,9 +22,10 @@ class ProfileManagementScreen extends StatefulWidget {
 class _ProfileManagementScreenState extends State<ProfileManagementScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emergencyController = TextEditingController();
+  final TextEditingController _mobileController = TextEditingController();
   File? _profileImage;
   String? _paymentMethod;
-
+  String profileImage = "";
   final List<String> _paymentMethods = [
     "UPI",
     "Credit Card",
@@ -32,7 +36,30 @@ class _ProfileManagementScreenState extends State<ProfileManagementScreen> {
   @override
   void initState() {
     super.initState();
-    context.read<UpdateProfileCubit>().getProfile(context);
+    getUserData();
+    print("dsdsds");
+  }
+
+  getUserData() async {
+    await context.read<UpdateProfileCubit>().getProfile(context);
+    final state = context.read<UpdateProfileCubit>().state;
+    if (state is UpdateProfileSuccess) {
+      print("state.updateprofile.data.profilePhoto");
+      print(state.updateprofile.data.profilePhoto);
+      profileImage = state.updateprofile.data.profilePhoto;
+      SharedPreferenceHelper.setUserName(state.updateprofile.data.username);
+      setState(() {});
+      print("profileImageprofileImage");
+      print(profileImage);
+    }
+    if (state is UpdateProfileFetched) {
+      profileImage = state.profile.data.profilePhoto;
+      SharedPreferenceHelper.setUserName(state.profile.data.username);
+      setState(() {});
+      print("profileImageprofileImage");
+      print(profileImage);
+    }
+    print("profileImageprofileImage");
   }
 
   Future<void> _pickImage() async {
@@ -89,7 +116,8 @@ class _ProfileManagementScreenState extends State<ProfileManagementScreen> {
     });
 
     if (mounted) {
-      context.read<UpdateProfileCubit>().updateProfile(data, context);
+      await context.read<UpdateProfileCubit>().updateProfile(data, context);
+      getUserData();
     }
   }
 
@@ -102,6 +130,7 @@ class _ProfileManagementScreenState extends State<ProfileManagementScreen> {
             _nameController.text = state.profile.data.username;
             _emergencyController.text =
                 state.profile.data.emergencyContactNumber;
+            _mobileController.text = state.profile.data.mobile;
             _paymentMethod = state.profile.data.preferredPaymentMethod.isEmpty
                 ? "UPI"
                 : state.profile.data.preferredPaymentMethod;
@@ -118,10 +147,10 @@ class _ProfileManagementScreenState extends State<ProfileManagementScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
-            onPressed: () => Navigator.pop(context),
-          ),
+          // leading: IconButton(
+          //   icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+          //   onPressed: () => Navigator.pop(context),
+          // ),
           backgroundColor: Colors.white,
           elevation: 0,
           title: Text(
@@ -131,7 +160,6 @@ class _ProfileManagementScreenState extends State<ProfileManagementScreen> {
                 .bodyMedium
                 ?.copyWith(fontSize: 15.sp, fontWeight: FontWeight.bold),
           ),
-          centerTitle: true,
         ),
         body: BlocBuilder<UpdateProfileCubit, UpdateProfileState>(
           builder: (context, state) {
@@ -143,15 +171,15 @@ class _ProfileManagementScreenState extends State<ProfileManagementScreen> {
                   Center(
                     child: CircleAvatar(
                       radius: 50.r,
+                      backgroundColor: AppColors.background.withOpacity(0.4),
                       backgroundImage: _profileImage != null
                           ? FileImage(_profileImage!)
-                          : (state is UpdateProfileFetched &&
-                                  state.profile.data.profilePhoto.isNotEmpty)
-                              ? NetworkImage(state.profile.data.profilePhoto)
+                          : (profileImage.isNotEmpty)
+                              ? NetworkImage(profileImage)
                               : null,
-                      child: _profileImage == null
+                      child: (_profileImage == null && (profileImage.isEmpty))
                           ? const Icon(Icons.person,
-                              size: 50, color: Colors.grey)
+                              size: 50, color: Colors.white)
                           : null,
                     ),
                   ),
@@ -220,10 +248,51 @@ class _ProfileManagementScreenState extends State<ProfileManagementScreen> {
                       borderRadius: BorderRadius.circular(8.r),
                     ),
                     child: TextField(
+                      controller: _mobileController,
+                      readOnly: true,
+                      showCursor: false,
+                      // 👈 Hide blinking cursor
+                      enableInteractiveSelection: false,
+                      //keyboardType: TextInputType.phone,
+                      decoration: InputDecoration(
+                        hintText: "Phone Number",
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8.r),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8.r),
+                          borderSide: const BorderSide(
+                              color: Colors.transparent, width: 2),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8.r),
+                          borderSide: const BorderSide(
+                              color: Colors.transparent, width: 1),
+                        ),
+                        hintStyle: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: Colors.grey),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 10.h),
+                  Text(
+                    "Emergency Contact",
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.bold, fontSize: 14.sp),
+                  ),
+                  SizedBox(height: 10.h),
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(8.r),
+                    ),
+                    child: TextField(
                       controller: _emergencyController,
                       keyboardType: TextInputType.phone,
                       decoration: InputDecoration(
-                        hintText: "Emergency Contact Number",
+                        hintText: "Emergency Number",
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8.r),
                         ),

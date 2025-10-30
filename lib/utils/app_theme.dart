@@ -8,6 +8,9 @@ class AppTheme {
       brightness: Brightness.light,
       primarySwatch: Colors.orange,
       scaffoldBackgroundColor: Colors.white,
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: AppColors.background,
+      ),
       textTheme: TextTheme(
         headlineSmall: GoogleFonts.poppins(
             fontSize: 14.sp, fontWeight: FontWeight.w600, color: Colors.black),

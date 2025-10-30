@@ -54,7 +54,7 @@ class Data {
     cashback = json['cashback'] ?? 0;
     waterBottles = json['water_bottles'] ?? 0;
     tea = json['tea'] ?? 0;
-    discount = json['discount'] ?? 0;
+    discount = json['discount'] ?? "";
   }
 
   Map<String, dynamic> toJson() {

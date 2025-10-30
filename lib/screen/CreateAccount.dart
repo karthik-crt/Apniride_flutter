@@ -59,6 +59,7 @@ class _CreateaccountState extends State<Createaccount> {
       listener: (context, state) {
         if (state is RegisterSuccess) {
           SharedPreferenceHelper.setToken(state.register.access);
+          SharedPreferenceHelper.setUserName(state.register.username);
           print("SharedPreference ${SharedPreferenceHelper.getToken()}");
           Navigator.pushReplacement(
             context,
