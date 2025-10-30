@@ -77,6 +77,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
   Razorpay? _razorpay;
   bool _addingCashback = false;
   int _waterBottles = 0;
+  int _tea = 0;
   bool _isDialogShowing = false;
   static const double bearingSmoothingFactor = 0.3;
   static const double proximityThresholdKm = 0.05;
@@ -954,6 +955,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
               String vehicle = widget.bookingStatus.data.vehicleType ?? '';
               num dist = widget.distance;
               int waterBottles = 0;
+              int tea = 0;
               print("dist ${dist}");
               for (var rule in state.cashbacks.data) {
                 print("LoopLoop");
@@ -963,6 +965,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
                     dist <= rule.maxDistance) {
                   print("Satisfied");
                   waterBottles = rule.waterBottles.toInt();
+                  tea = rule.tea.toInt();
                   print("waterBottles ${waterBottles}");
                   break;
                 }
@@ -970,6 +973,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
               if (mounted) {
                 setState(() {
                   _waterBottles = waterBottles;
+                  _tea = tea;
                   print("_waterBottles ${_waterBottles}");
                 });
               }
@@ -1341,6 +1345,14 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
                                     leading: Image.asset("assets/bottle.png"),
                                     title: const Text(
                                         "Free water bottle Services"),
+                                    subtitle:
+                                        const Text("Applicable for your rides"),
+                                  ),
+                                ],
+                                if (_tea > 0) ...[
+                                  ListTile(
+                                    leading: Image.asset("assets/tea.jpeg"),
+                                    title: const Text("Tea will provide"),
                                     subtitle:
                                         const Text("Applicable for your rides"),
                                   ),
